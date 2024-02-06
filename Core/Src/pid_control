@@ -1,0 +1,79 @@
+/**
+  ******************************************************************************
+  * @file           : main.c
+  * @brief          : Main program body
+  ******************************************************************************
+  * @attention
+  *
+  ******************************************************************************
+*/
+
+/* Private includes ----------------------------------------------------------*/
+#include "string.h"
+#include "main.h"
+
+/* Private typedef -----------------------------------------------------------*/
+
+/* Private define ------------------------------------------------------------*/
+#define PID_Ax 0.05
+#define PID_Bx 0.00001
+#define PID_Cx 0.1
+#define PID_MAX 2000
+#define PID_MIN -2000
+#define PID_SETPOINT 0.0
+#define MAX_V 12.0
+#define MIN_X 3.1
+
+#define FACTOR_X 0.00516
+#define FACTOR_Y 0.00168
+#define UART_BAUDRATE 115200
+#define PID_SAMPLING 100000
+
+
+/* Private macro -------------------------------------------------------------*/
+
+/* Private variable ----------------------------------------------------------*/
+/* Constantes PID Horizontal*/
+float ax,bx,cx;                         			//constantes del PID voltaje
+float rTx,eTx,iTx,dTx,yTx,yT0x,uTx,iT0x,eT0x;   	//variables de ecuaciones de PID voltaje
+float pidx_max1,pidx_min1;                			//límites máximo y mínimo de control.
+
+pidx_min1 = PID_MIN;
+pidx_max1 = PID_MAX;
+iT0x=0.0;
+eT0x=0.0;
+
+rTx=PID_SETPOINT;
+
+ax= PID_Ax;
+bx= PID_Bx;
+cx= PID_Cx;
+
+/* Private functions ---------------------------------------------------------*/
+void PID_voltage (float voltage){
+
+
+	yTx = //Señal de voltaje
+
+	eTx=rTx-yTx;                 //Cálculo error voltaje
+
+	iTx=bx*(eTx+eT0x)+iT0x;      //Cálculo del término integral voltaje
+
+	/*Limite termino integral voltage*/
+	if (iTx>pidx_max1) iTx=pidx_max1;            //Salida integral si es mayor que el MAX
+	else if (iTx<pidx_min1) iTx=pidx_min1;       //Salida integral si es menor que el MIN
+
+
+	dTx=-cx*(yTx-yT0x);			 //Cálculo del término derivativo voltage
+	uTx=iTx+ax*eTx+dTx;            //Cálculo de la salida PID voltage
+
+	/*Limite PID voltage*/
+	if (uTx>pidx_max1) uTx=pidx_max1;           //Salida PID si es mayor que el MAX
+	else if (uTx<pidx_min1) uTx=pidx_min1;      //Salida PID si es menor que el MIN
+
+	/* Guardar variables */
+	iT0x=iTx;
+	eT0x=eTx;
+	yT0x=yTx;
+
+}
