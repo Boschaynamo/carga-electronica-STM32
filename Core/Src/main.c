@@ -102,12 +102,12 @@ osPoolId mpool;
 osMessageQDef(colaSPI_TX, 5, uint32_t); // Define message queue
 osMessageQId colaSPI_TX;
 
-osPoolDef(mpoolCARGA_Handle, 1, sizeof(CARGA_HandleTypeDef)); // Define memory pool
+osPoolDef(mpoolCARGA_Handle, 1, CARGA_HandleTypeDef); // Define memory pool
 osPoolId mpoolCARGA_Handle;
 osMessageQDef(colaCARGA, 1, uint32_t); // Define message queue
 osMessageQId colaCARGA;
 
-osPoolDef(mpoolMediciones, 5, sizeof(MEDICIONES_TypeDef)); // Define memory pool
+osPoolDef(mpoolMediciones, 5, MEDICIONES_TypeDef); // Define memory pool
 osPoolId mpoolMediciones;
 osMessageQDef(colaMediciones, 5, uint32_t); // Define message queue
 osMessageQId colaMediciones;
@@ -202,15 +202,15 @@ int main(void)
 
   /* Create the thread(s) */
   /* definition and creation of defaultTask */
-  osThreadDef(defaultTask, StartDefaultTask, osPriorityNormal, 0, 128);
+  osThreadDef(defaultTask, StartDefaultTask, osPriorityNormal, 0, 256);
   defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
 
   /* definition and creation of medicion */
-  osThreadDef(medicion, medicion_variables, osPriorityAboveNormal, 0, 128);
+  osThreadDef(medicion, medicion_variables, osPriorityAboveNormal, 0, 256);
   medicionHandle = osThreadCreate(osThread(medicion), NULL);
 
   /* definition and creation of comunicacion */
-  osThreadDef(comunicacion, comunicacion_spi, osPriorityBelowNormal, 0, 128);
+  osThreadDef(comunicacion, comunicacion_spi, osPriorityBelowNormal, 0, 256);
   comunicacionHandle = osThreadCreate(osThread(comunicacion), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
@@ -613,10 +613,17 @@ void StartDefaultTask(void const * argument)
 	//Puntero a mediciones de V e I
 	MEDICIONES_TypeDef* p_mediciones;
 
+	// Inicializo variable carga electronica
+	CARGAPresente.modo =  m_apagado;
+	CARGAPresente.setPoint = 0;
+	CARGAPresente.valorCorriente = 0;
+	CARGAPresente.valorTension = 0;
+	CARGAPresente.valorPotencia = 0;
+	CARGAPresente.flagFecha = 0;
+	CARGAPresente.flagTrigger = 0;
+
 	/* Inicializo DAC */
 	DAC_init();
-
-	CARGAPresente.modo =  m_corriente;
 
 	/* Infinite loop */
 	for (;;)
@@ -647,49 +654,54 @@ void StartDefaultTask(void const * argument)
 			osMessagePut(colaSPI_TX, (uint32_t)p_tx, osWaitForever);
 		}
 
-//		//Recibo msj de la tarea comunicacion
-//		evt = osMessageGet(colaCARGA, 1);
-//		if(evt.status==osEventMessage){
-//			CARGAUpdate = evt.value.p;
-//
-//			//Interpreto si hubo un cambio de modo
-//			if(CARGAPresente.modo != CARGAUpdate->modo){
-//				CARGAPresente.modo = CARGAUpdate->modo;
-//				switch(CARGAPresente.modo){
-//				/* Apago la carga */
-//				case m_apagado:
-//				case m_bateria_off:
-//				case m_corriente_off:
-//				case m_fusible_off:
-//				case m_potenica_off:
-//				case m_tension_off:
-//					DAC_set(0);
-//					break;
-//					/* Modo corriente constante */
-//				case m_corriente:
-//					if(CARGAUpdate->setPoint >= 0 && CARGAUpdate->setPoint <= 30000){
-//						CARGAPresente.setPoint = CARGAUpdate->setPoint;
-//						DAC_set(CARGAPresente.setPoint/10); //Convierto mA a salida DAC. IMPORTANTISIMO EL /10
-//					}
-//					break;
-//
-//				case m_potencia:
-//					break;
-//
-//				case m_tension:
-//					break;
-//
-//				case m_bateria:
-//					break;
-//				case m_fusible:
-//					break;
-//
-//				default:
-//				}
-//			}
-//			//Libero el msj de la memoria
-//			osPoolFree(mpoolCARGA_Handle, CARGAUpdate);
-//		}
+
+		//Recibo msj de la tarea comunicacion
+		evt = osMessageGet(colaCARGA, 1);
+		if(evt.status == osEventMessage){
+			CARGAUpdate = evt.value.p;
+
+			//Interpreto si hubo un cambio de modo
+			if(CARGAPresente.modo != CARGAUpdate->modo){
+				CARGAPresente.modo = CARGAUpdate->modo;
+			}
+
+			switch(CARGAPresente.modo){
+			/* Apago la carga */
+			case m_apagado:
+			case m_bateria_off:
+			case m_corriente_off:
+			case m_fusible_off:
+			case m_potenica_off:
+			case m_tension_off:
+				DAC_set(0);
+				break;
+
+			case m_corriente:
+				/* Modo corriente constante */
+				if(CARGAUpdate->setPoint >= 0 && CARGAUpdate->setPoint <= 30000){
+					CARGAPresente.setPoint = CARGAUpdate->setPoint;
+					DAC_set(CARGAPresente.setPoint/10); //Convierto mA a salida DAC. IMPORTANTISIMO EL /10
+				}
+				break;
+
+			case m_potencia:
+				break;
+
+			case m_tension:
+				break;
+
+			case m_bateria:
+				break;
+			case m_fusible:
+				break;
+
+			default:
+			}
+
+			//Libero el msj de la memoria
+			osPoolFree(mpoolCARGA_Handle, CARGAUpdate);
+			CARGAUpdate = NULL;
+		}
 
 	}
   /* USER CODE END 5 */
@@ -788,6 +800,10 @@ void medicion_variables(void const * argument)
 		  cargaMediciones->tension = tension;
 		  osMessagePut(colaMediciones, (uint32_t)cargaMediciones, osWaitForever);
 	  }
+	  else{
+		  // Si no hay lugar en la cola mediciones espero 100ms
+		  osDelay(100);
+	  }
   }
 
   /* USER CODE END medicion_variables */
@@ -831,42 +847,40 @@ void comunicacion_spi(void const * argument)
 			  HAL_SPI_TransmitReceive(&hspi2, (uint8_t*)pArrayFromCola, array_SPI_RX, 21, HAL_MAX_DELAY);
 			  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_SET);
 
-//			  // Interpreto cadena recibida
-//			  if (array_SPI_RX[0] == 'r' && array_SPI_RX[1] == 's')
-//			  {
-//				  // Recibo y guardo setpoint y modo
-//				  updateCarga->modo = (enum modos_carga)(((uint8_t)array_SPI_RX[3] - 48) * 10 + ((uint8_t)array_SPI_RX[4] - 48));
-//				  sscanf((char*) array_SPI_RX, "%*[^S]S%4lu", &updateCarga->setPoint); //Actualizo el setpoint en el CargaHandle local de esta tarea
-//				  updateCarga->setPoint *=100;
-//				  //*************************//
-//
-//				  //Aca hago el trigger
-//				  updateCarga->flagTrigger = array_SPI_RX[13];
-//				  if (array_SPI_RX[13] == '1')
-//				  {
-//					  // TRIGGER ACTIVADO Y LISTO PARA EL SERVICIO
-//				  }
-//
-//				  // Si hay que modificar fecha
-//				  updateCarga->flagFecha = array_SPI_RX[11];
-//				  if (array_SPI_RX[11] == '1')
-//				  {
-//					  uint8_t arrayFecha[21] = "hmF";
-//					  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_RESET);
-//					  HAL_SPI_TransmitReceive(&hspi2, arrayFecha, array_SPI_RX, 21, HAL_MAX_DELAY);
-//					  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_SET);
-//
-//					  //Aca guardo la fecha y hora
-//					  sscanf((char*) array_SPI_RX, "%*[^F]F%2c%2c%2c%2c%2c", &sTime.Hours, &sTime.Minutes, &sDate.Date, &sDate.Month, &sDate.Year);
-//					  HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BIN);
-//					  HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BIN);
-//					  //*********************//
-//				  }
-//			  }
-			  /* COMO ES UNA PRUEBA DE SOLO MANDAR ELIMINO TODO LO QUE RECIBI */
-			  osPoolFree(mpoolCARGA_Handle, updateCarga);
+			  // Interpreto cadena recibida
+			  if (array_SPI_RX[0] == 'r' && array_SPI_RX[1] == 's')
+			  {
+				  // Recibo y guardo setpoint y modo
+				  updateCarga->modo = (enum modos_carga)(((uint8_t)array_SPI_RX[3] - 48) * 10 + ((uint8_t)array_SPI_RX[4] - 48));
+				  sscanf((char*) array_SPI_RX, "%*[^S]S%4lu", &updateCarga->setPoint); //Actualizo el setpoint en el CargaHandle local de esta tarea
+				  updateCarga->setPoint *=100;
+
+				  //Aca hago el trigger
+				  updateCarga->flagTrigger = array_SPI_RX[13];
+				  if (array_SPI_RX[13] == '1')
+				  {
+					  // TRIGGER ACTIVADO Y LISTO PARA EL SERVICIO
+					  __NOP();
+				  }
+
+				  // Si hay que modificar fecha
+				  updateCarga->flagFecha = array_SPI_RX[11];
+				  if (array_SPI_RX[11] == '1')
+				  {
+					  uint8_t arrayFecha[21] = "hmF";
+					  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_RESET);
+					  HAL_SPI_TransmitReceive(&hspi2, arrayFecha, array_SPI_RX, 21, HAL_MAX_DELAY);
+					  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_SET);
+
+					  //Aca guardo la fecha y hora
+					  sscanf((char*) array_SPI_RX, "%*[^F]F%2c%2c%2c%2c%2c", &sTime.Hours, &sTime.Minutes, &sDate.Date, &sDate.Month, &sDate.Year);
+					  HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BIN);
+					  HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BIN);
+				  }
+			  }
+
 			  // Envio los datos analizados task default
-			  //	  osMessagePut(colaCARGA, (uint32_t) updateCarga, osWaitForever);
+			  osMessagePut(colaCARGA, (uint32_t) updateCarga, osWaitForever);
 		  }
 		  // Liberar memoria asignada para el mensaje recibido
 		  osPoolFree(mpool, pArrayFromCola);
