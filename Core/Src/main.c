@@ -23,6 +23,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "stdio.h"
+#include "stdbool.h"
 #include "string.h"
 #include "adc_function.h"
 
@@ -106,13 +107,10 @@ osPoolId mpoolCARGA_Handle;
 osMessageQDef(colaCARGA, 1, uint32_t); // Define message queue
 osMessageQId colaCARGA;
 
-
 osPoolDef(mpoolMediciones, 5, sizeof(MEDICIONES_TypeDef)); // Define memory pool
 osPoolId mpoolMediciones;
 osMessageQDef(colaMediciones, 5, uint32_t); // Define message queue
 osMessageQId colaMediciones;
-
-
 
 // Definiciones para RTC
 RTC_TimeTypeDef sTime;
@@ -127,9 +125,9 @@ static void MX_ADC1_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_SPI2_Init(void);
 static void MX_RTC_Init(void);
-void StartDefaultTask(void const *argument);
-void medicion_variables(void const *argument);
-void comunicacion_spi(void const *argument);
+void StartDefaultTask(void const * argument);
+void medicion_variables(void const * argument);
+void comunicacion_spi(void const * argument);
 
 /* USER CODE BEGIN PFP */
 /* Prototipos funciones DAC MCP4725 I2C */
@@ -143,9 +141,9 @@ void DAC_set(float setPoint);
 /* USER CODE END 0 */
 
 /**
- * @brief  The application entry point.
- * @retval int
- */
+  * @brief  The application entry point.
+  * @retval int
+  */
 int main(void)
 {
   /* USER CODE BEGIN 1 */
@@ -235,23 +233,23 @@ int main(void)
 }
 
 /**
- * @brief System Clock Configuration
- * @retval None
- */
+  * @brief System Clock Configuration
+  * @retval None
+  */
 void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
   /** Configure the main internal regulator output voltage
-   */
+  */
   __HAL_RCC_PWR_CLK_ENABLE();
   __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
 
   /** Initializes the RCC Oscillators according to the specified parameters
-   * in the RCC_OscInitTypeDef structure.
-   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_LSI | RCC_OSCILLATORTYPE_HSE;
+  * in the RCC_OscInitTypeDef structure.
+  */
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_LSI|RCC_OSCILLATORTYPE_HSE;
   RCC_OscInitStruct.HSEState = RCC_HSE_ON;
   RCC_OscInitStruct.LSIState = RCC_LSI_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
@@ -266,8 +264,9 @@ void SystemClock_Config(void)
   }
 
   /** Initializes the CPU, AHB and APB buses clocks
-   */
-  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
+  */
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
+                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
@@ -280,10 +279,10 @@ void SystemClock_Config(void)
 }
 
 /**
- * @brief ADC1 Initialization Function
- * @param None
- * @retval None
- */
+  * @brief ADC1 Initialization Function
+  * @param None
+  * @retval None
+  */
 static void MX_ADC1_Init(void)
 {
 
@@ -298,7 +297,7 @@ static void MX_ADC1_Init(void)
   /* USER CODE END ADC1_Init 1 */
 
   /** Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion)
-   */
+  */
   hadc1.Instance = ADC1;
   hadc1.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
   hadc1.Init.Resolution = ADC_RESOLUTION_12B;
@@ -317,7 +316,7 @@ static void MX_ADC1_Init(void)
   }
 
   /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
-   */
+  */
   sConfig.Channel = ADC_CHANNEL_8;
   sConfig.Rank = 1;
   sConfig.SamplingTime = ADC_SAMPLETIME_3CYCLES;
@@ -328,13 +327,14 @@ static void MX_ADC1_Init(void)
   /* USER CODE BEGIN ADC1_Init 2 */
 
   /* USER CODE END ADC1_Init 2 */
+
 }
 
 /**
- * @brief I2C1 Initialization Function
- * @param None
- * @retval None
- */
+  * @brief I2C1 Initialization Function
+  * @param None
+  * @retval None
+  */
 static void MX_I2C1_Init(void)
 {
 
@@ -361,13 +361,14 @@ static void MX_I2C1_Init(void)
   /* USER CODE BEGIN I2C1_Init 2 */
 
   /* USER CODE END I2C1_Init 2 */
+
 }
 
 /**
- * @brief RTC Initialization Function
- * @param None
- * @retval None
- */
+  * @brief RTC Initialization Function
+  * @param None
+  * @retval None
+  */
 static void MX_RTC_Init(void)
 {
 
@@ -383,7 +384,7 @@ static void MX_RTC_Init(void)
   /* USER CODE END RTC_Init 1 */
 
   /** Initialize RTC Only
-   */
+  */
   hrtc.Instance = RTC;
   hrtc.Init.HourFormat = RTC_HOURFORMAT_24;
   hrtc.Init.AsynchPrediv = 127;
@@ -401,7 +402,7 @@ static void MX_RTC_Init(void)
   /* USER CODE END Check_RTC_BKUP */
 
   /** Initialize RTC and set the Time and Date
-   */
+  */
   sTime.Hours = 20;
   sTime.Minutes = 17;
   sTime.Seconds = 10;
@@ -423,13 +424,14 @@ static void MX_RTC_Init(void)
   /* USER CODE BEGIN RTC_Init 2 */
 
   /* USER CODE END RTC_Init 2 */
+
 }
 
 /**
- * @brief SPI2 Initialization Function
- * @param None
- * @retval None
- */
+  * @brief SPI2 Initialization Function
+  * @param None
+  * @retval None
+  */
 static void MX_SPI2_Init(void)
 {
 
@@ -460,18 +462,19 @@ static void MX_SPI2_Init(void)
   /* USER CODE BEGIN SPI2_Init 2 */
 
   /* USER CODE END SPI2_Init 2 */
+
 }
 
 /**
- * @brief GPIO Initialization Function
- * @param None
- * @retval None
- */
+  * @brief GPIO Initialization Function
+  * @param None
+  * @retval None
+  */
 static void MX_GPIO_Init(void)
 {
   GPIO_InitTypeDef GPIO_InitStruct = {0};
-  /* USER CODE BEGIN MX_GPIO_Init_1 */
-  /* USER CODE END MX_GPIO_Init_1 */
+/* USER CODE BEGIN MX_GPIO_Init_1 */
+/* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOC_CLK_ENABLE();
@@ -483,19 +486,19 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, ISCALE_Pin | VSCALE_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, ISCALE_Pin|VSCALE_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pins : TRIGGER_Pin CONEXT_Pin EMOS2_Pin */
-  GPIO_InitStruct.Pin = TRIGGER_Pin | CONEXT_Pin | EMOS2_Pin;
+  GPIO_InitStruct.Pin = TRIGGER_Pin|CONEXT_Pin|EMOS2_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : EMOS1_Pin ADC_RDY_Pin */
-  GPIO_InitStruct.Pin = EMOS1_Pin | ADC_RDY_Pin;
+  /*Configure GPIO pin : EMOS1_Pin */
+  GPIO_InitStruct.Pin = EMOS1_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+  HAL_GPIO_Init(EMOS1_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PB12 */
   GPIO_InitStruct.Pin = GPIO_PIN_12;
@@ -511,14 +514,20 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_Init(VINV_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : ISCALE_Pin VSCALE_Pin */
-  GPIO_InitStruct.Pin = ISCALE_Pin | VSCALE_Pin;
+  GPIO_InitStruct.Pin = ISCALE_Pin|VSCALE_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /* USER CODE BEGIN MX_GPIO_Init_2 */
-  /* USER CODE END MX_GPIO_Init_2 */
+  /*Configure GPIO pin : ADC_RDY_Pin */
+  GPIO_InitStruct.Pin = ADC_RDY_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(ADC_RDY_GPIO_Port, &GPIO_InitStruct);
+
+/* USER CODE BEGIN MX_GPIO_Init_2 */
+/* USER CODE END MX_GPIO_Init_2 */
 }
 
 /* USER CODE BEGIN 4 */
@@ -537,7 +546,7 @@ void DAC_init(void)
   HAL_I2C_Master_Transmit(&hi2c1, MCP4725_ADDR, buffer, 2, HAL_MAX_DELAY);
   HAL_I2C_Master_Receive(&hi2c1, MCP4725_ADDR, buffer, 5, HAL_MAX_DELAY);
   // Cargo el valor recibido del buffer a una variable para tener el valor de la eeprom.
-  i2cRX = (buffer[3] << 8) || buffer[4];
+  i2cRX = (buffer[3] << 8) | buffer[4];
   // Mascareo de rutix
   i2cRX &= MASK_DAC_READ;
 
@@ -571,8 +580,10 @@ void DAC_set(float setPoint)
 { // setPoint = valor en mV.
   uint8_t buffer[2];
 
-  if (setPoint < 0 || setPoint >= 5000)
-    return HAL_I2C_Master_Transmit(&hi2c1, MCP4725_ADDR, 0, 2, HAL_MAX_DELAY);
+  if (setPoint < 0 || setPoint >= 5000){
+	  HAL_I2C_Master_Transmit(&hi2c1, MCP4725_ADDR, 0, 2, HAL_MAX_DELAY);
+	  return;
+  }
 
   setPoint = ((setPoint) * 4096) / 5000;
   buffer[0] = ((uint16_t)setPoint) >> 8;
@@ -588,79 +599,99 @@ void DAC_set(float setPoint)
  * @retval None
  */
 /* USER CODE END Header_StartDefaultTask */
-void StartDefaultTask(void const *argument)
+void StartDefaultTask(void const * argument)
 {
   /* USER CODE BEGIN 5 */
-	//*****Variables**//
+	// Variables
 	CARGA_HandleTypeDef CARGAPresente;
 	CARGA_HandleTypeDef *CARGAUpdate;
 	osEvent evt;
 
+	//Puntero a cadena transmision
+	char *p_tx;
 
-	//****************//
+	//Puntero a mediciones de V e I
+	MEDICIONES_TypeDef* p_mediciones;
 
-  /* Inicializo DAC */
-  DAC_init();
-  float set_point = 150;
+	/* Inicializo DAC */
+	DAC_init();
 
-  /* Infinite loop */
-  for (;;)
-  {
-	  //Recibo de tu colita punto com
-	  evt = osMessageGet(colaCARGA, 1);
-	  if(evt.status==osEventMessage){
-		  CARGAUpdate = evt.value.p;
+	CARGAPresente.modo =  m_corriente;
 
-		  if(CARGAPresente.modo != CARGAUpdate->modo){
-			  CARGAPresente.modo = CARGAUpdate->modo;
-			  switch(CARGAPresente.modo){
-				  case m_apagado:
-				  case m_bateria_off:
-				  case m_corriente_off:
-				  case m_fusible_off:
-				  case m_potenica_off:
-				  case m_tension_off:
-					  DAC_set(0);
-					break;
+	/* Infinite loop */
+	for (;;)
+	{
+		// Tomo las mediciones task medicion_variables (espero 10mS)
+		evt = osMessageGet(colaMediciones, 50);
+		if(evt.status == osEventMessage){
+			p_mediciones = evt.value.p;
+			//Actualizo las variables de la carga electronica y verifico
+			CARGAPresente.valorCorriente = (uint32_t)p_mediciones->corriente;
+			CARGAPresente.valorTension = (uint32_t)p_mediciones->tension;
+			CARGAPresente.valorPotencia = (uint32_t)(p_mediciones->corriente * p_mediciones->tension)/1000;
 
+			// Liberar memoria asignada para el mensaje
+			osPoolFree(mpoolMediciones, p_mediciones);
+		}
 
+		// Inicio comunicacion con ESP32 a traves de task comunicacion_spi
+		p_tx = osPoolAlloc(mpool);
+		if( p_tx != NULL ){
+			// Carga la cadena a transmitir
+			sprintf(p_tx,"hmM%02luC%04luV%04luP%04lu",(uint32_t)CARGAPresente.modo,\
+					(uint32_t)CARGAPresente.valorCorriente/10,\
+					(uint32_t)CARGAPresente.valorTension/10,\
+					(uint32_t)CARGAPresente.valorPotencia/10);
 
-				  case m_corriente:
-					  if(CARGAUpdate->setPoint>=0 && CARGAUpdate->setPoint<=30000){
-						  CARGAPresente.setPoint = CARGAUpdate->setPoint;
-						  DAC_set(CARGAPresente.setPoint/10); //IMPORTANTISIMO EL /10
-					  }
-					 break;
+			// Envio la cadena a transmitir task comunicacion_spi
+			osMessagePut(colaSPI_TX, (uint32_t)p_tx, osWaitForever);
+		}
 
+//		//Recibo msj de la tarea comunicacion
+//		evt = osMessageGet(colaCARGA, 1);
+//		if(evt.status==osEventMessage){
+//			CARGAUpdate = evt.value.p;
+//
+//			//Interpreto si hubo un cambio de modo
+//			if(CARGAPresente.modo != CARGAUpdate->modo){
+//				CARGAPresente.modo = CARGAUpdate->modo;
+//				switch(CARGAPresente.modo){
+//				/* Apago la carga */
+//				case m_apagado:
+//				case m_bateria_off:
+//				case m_corriente_off:
+//				case m_fusible_off:
+//				case m_potenica_off:
+//				case m_tension_off:
+//					DAC_set(0);
+//					break;
+//					/* Modo corriente constante */
+//				case m_corriente:
+//					if(CARGAUpdate->setPoint >= 0 && CARGAUpdate->setPoint <= 30000){
+//						CARGAPresente.setPoint = CARGAUpdate->setPoint;
+//						DAC_set(CARGAPresente.setPoint/10); //Convierto mA a salida DAC. IMPORTANTISIMO EL /10
+//					}
+//					break;
+//
+//				case m_potencia:
+//					break;
+//
+//				case m_tension:
+//					break;
+//
+//				case m_bateria:
+//					break;
+//				case m_fusible:
+//					break;
+//
+//				default:
+//				}
+//			}
+//			//Libero el msj de la memoria
+//			osPoolFree(mpoolCARGA_Handle, CARGAUpdate);
+//		}
 
-
-				  case m_potencia:
-					 break;
-
-				  case m_tension:
-					 break;
-
-				  case m_bateria:
-					  break;
-				  case m_fusible:
-					  break;
-
-				  default:
-			  }
-		  }
-
-		  osPoolFree(mpoolCARGA_Handle, CARGAUpdate);
-	  }
-
-
-
-    DAC_set(set_point); // Seteo corriente en 1500mA
-
-    // A LA BU RAR
-
-
-    osDelay(100);
-  }
+	}
   /* USER CODE END 5 */
 }
 
@@ -669,36 +700,96 @@ void StartDefaultTask(void const *argument)
  * @brief Function implementing the medicion thread.
  * @param argument: Not used
  * @retval None
+ * Esta funcion toma mediciones del ADC de corriente y tension, les hace un
+ * filtro EMA y devuelve los valores obtenidos cada 20Hz.
  */
 /* USER CODE END Header_medicion_variables */
-void medicion_variables(void const *argument)
+void medicion_variables(void const * argument)
 {
   /* USER CODE BEGIN medicion_variables */
-  float tension = 5.21, tension_ant = 0;
-  float current = 5.44, current_ant = 0;
+  float tension = 0, tension_ant = 0;
+  float current = 0, current_ant = 0;
 
+  // Estructura mediciones
   MEDICIONES_TypeDef* cargaMediciones;
+
+  // Rango 160V False - 16V True
+  bool rango = false;
+  uint8_t c_rango = 0;
+
+  // Configuro ADS1115 para usar pin de RDY
+  ADC_set_rdypin(&hi2c1);
+
+  uint32_t previosWakeTime = osKernelSysTick();
 
   /* Infinite loop */
   for (;;)
   {
-	cargaMediciones = osPoolAlloc(mpoolMediciones);
-    /* Medicion de Corriente */
-    current = current_ant * (1 - 0.4) + 0.4 * ADC_read_current(&hi2c1);
-    if (current > 9999 || current < 0)
-      current = 1234;
-    current_ant = current;
-    cargaMediciones->corriente=current;
+	  cargaMediciones = osPoolAlloc(mpoolMediciones);
 
-    /* Medicion de Tension */
-    tension = tension_ant * (1 - 0.6) + 0.6 * ADC_read_tension(&hi2c1);
-    if (tension > 9999 || tension < 0)
-      tension = 1234;
-    tension_ant = tension;
-    cargaMediciones->tension=tension;
+	  if ( cargaMediciones != NULL ){
 
-    osMessagePut(colaMediciones, (uint32_t) cargaMediciones, osWaitForever);
+		  for (uint8_t c = 0; c < 10; c++){
+			  /* Medicion de Corriente con filtro EMA */
+			  current = current_ant * (1 - 0.4) + 0.4 * ADC_read_current(&hi2c1);
+			  current_ant = current;
+
+			  /* Medicion de Tension con filtro EMA*/
+			  tension = tension_ant * (1 - 0.6) + 0.6 * ADC_read_tension(&hi2c1, rango);
+			  tension_ant = tension;
+
+			  // Si la tension < 0 normalizo
+			  if (tension < 0)
+				  tension = 0;
+
+			  // Verificar en que rango estamos de tension
+			  if(rango == true){
+				  // Rango 16V
+
+				  if( tension > 16000){
+					  // Tension mayor al rango min
+					  c_rango++;
+
+					  if(c_rango > 2){
+						  //Lo supero 3 veces consecutiva(6ms) -> cambio rango a 160V
+						  rango = false;
+						  HAL_GPIO_WritePin(VSCALE_GPIO_Port, VSCALE_Pin, GPIO_PIN_RESET);
+						  c_rango = 0;
+					  }
+				  }
+				  else // Tension menor al rango max
+					  c_rango = 0;
+
+			  } else {
+				  // Rango 160V
+
+				  if(tension < 15500){
+					  // Tension menor al rango min
+					  c_rango++;
+
+					  if(c_rango > 20){
+						  // Estuvo por debajo 20 veces consecutivas (40ms)
+						  // -> Cambio rango a 16V.
+						  rango = true;
+						  HAL_GPIO_WritePin(VSCALE_GPIO_Port, VSCALE_Pin, GPIO_PIN_SET);
+						  c_rango = 0;
+					  }
+				  }
+				  else
+					  c_rango = 0;
+			  }
+		  }
+
+		  // Bloqueo la tarea 5ms * 10 veces = 50mS
+		  osDelayUntil(&previosWakeTime, 5);
+		  // Envio las mediciones tasa 20Hz.
+		  // Guardo los valores de las variables a enviar.
+		  cargaMediciones->corriente = current;
+		  cargaMediciones->tension = tension;
+		  osMessagePut(colaMediciones, (uint32_t)cargaMediciones, osWaitForever);
+	  }
   }
+
   /* USER CODE END medicion_variables */
 }
 
@@ -709,83 +800,85 @@ void medicion_variables(void const *argument)
  * @retval None
  */
 /* USER CODE END Header_comunicacion_spi */
-void comunicacion_spi(void const *argument)
+void comunicacion_spi(void const * argument)
 {
   /* USER CODE BEGIN comunicacion_spi */
-  uint8_t copiaArrayFromCola[21] = "HOLA";
   uint8_t array_SPI_RX[21] = "soyTuPuntero";
 
   CARGA_HandleTypeDef *updateCarga;
-  updateCarga = osPoolAlloc(mpoolCARGA_Handle); //Te pongo en la pool bro
 
-  // Queue defitinions
+  // Definiciones de cola
   char *pArrayFromCola;
   osEvent evt;
 
   /* Infinite loop */
   for (;;)
   {
-    // RECIBO POR COLA Y SI NO BLOQUEO
-    evt = osMessageGet(colaSPI_TX, osWaitForever);
-    // RESPONDO EN BASE LA COLA
+	  // Recibo msj a transmitir de la task default
+	  evt = osMessageGet(colaSPI_TX, osWaitForever);
 
-    if (evt.status == osEventMessage)
-    {
-      pArrayFromCola = evt.value.p;
-      strcpy((char*)copiaArrayFromCola,pArrayFromCola);
+	  // Respondo en base a los datos recibidos del ESP32
+	  if (evt.status == osEventMessage)
+	  {
+		  pArrayFromCola = evt.value.p;
 
-      HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_RESET);
-      HAL_SPI_TransmitReceive(&hspi2, copiaArrayFromCola, array_SPI_RX, 21, HAL_MAX_DELAY);
-      HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_SET);
+		  // Reservo un espacio de memoria para asignar los datos recibidos
+		  updateCarga = osPoolAlloc(mpoolCARGA_Handle);
 
-      if (array_SPI_RX[0] == 'r' && array_SPI_RX[1] == 's')
-      {
+		  if( updateCarga != NULL){
 
-        // Recibo y guardo setpoint y modo
-        updateCarga->modo = (enum modos_carga)(((uint8_t)array_SPI_RX[3] - 48) * 10 + ((uint8_t)array_SPI_RX[4] - 48));
-        sscanf((char*) array_SPI_RX, "%*[^S]S%4lu", &updateCarga->setPoint); //Actualizo el setpoint en el CargaHandle local de esta tarea
-        updateCarga->setPoint *=10;
-        //*************************//
+			  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_RESET);
+			  HAL_SPI_TransmitReceive(&hspi2, (uint8_t*)pArrayFromCola, array_SPI_RX, 21, HAL_MAX_DELAY);
+			  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_SET);
 
-        //Aca hago el trigger
-        updateCarga->flagTrigger = array_SPI_RX[13];
-        if (array_SPI_RX[13] == '1')
-        {
-          // TRIGGER ACTIVADO Y LISTO PARA EL SERVICIO
-        }
-
-        // Si hay que modificar fecha
-        updateCarga->flagFecha = array_SPI_RX[11];
-        if (array_SPI_RX[11] == '1')
-        {
-          uint8_t arrayFecha[21] = "hmF";
-          HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_RESET);
-          HAL_SPI_TransmitReceive(&hspi2, arrayFecha, array_SPI_RX, 21, HAL_MAX_DELAY);
-          HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_SET);
-
-          //Aca guardo la fecha y hora
-          sscanf((char*) array_SPI_RX, "%*[^F]F%2c%2c%2c%2c%2c", &sTime.Hours, &sTime.Minutes, &sDate.Date, &sDate.Month, &sDate.Year);
-          HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BIN);
-          HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BIN);
-          //*********************//
-        }
-      }
-
-      osPoolFree(mpool, pArrayFromCola); // free memory allocated for message
-    }
-    osMessagePut(colaCARGA, (uint32_t) updateCarga, osWaitForever);
-
-
-    // Y NO HAGO NADA MAS PORQUE SOY UNA TAREA SENCILLA Y TONTA
-
+//			  // Interpreto cadena recibida
+//			  if (array_SPI_RX[0] == 'r' && array_SPI_RX[1] == 's')
+//			  {
+//				  // Recibo y guardo setpoint y modo
+//				  updateCarga->modo = (enum modos_carga)(((uint8_t)array_SPI_RX[3] - 48) * 10 + ((uint8_t)array_SPI_RX[4] - 48));
+//				  sscanf((char*) array_SPI_RX, "%*[^S]S%4lu", &updateCarga->setPoint); //Actualizo el setpoint en el CargaHandle local de esta tarea
+//				  updateCarga->setPoint *=100;
+//				  //*************************//
+//
+//				  //Aca hago el trigger
+//				  updateCarga->flagTrigger = array_SPI_RX[13];
+//				  if (array_SPI_RX[13] == '1')
+//				  {
+//					  // TRIGGER ACTIVADO Y LISTO PARA EL SERVICIO
+//				  }
+//
+//				  // Si hay que modificar fecha
+//				  updateCarga->flagFecha = array_SPI_RX[11];
+//				  if (array_SPI_RX[11] == '1')
+//				  {
+//					  uint8_t arrayFecha[21] = "hmF";
+//					  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_RESET);
+//					  HAL_SPI_TransmitReceive(&hspi2, arrayFecha, array_SPI_RX, 21, HAL_MAX_DELAY);
+//					  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_SET);
+//
+//					  //Aca guardo la fecha y hora
+//					  sscanf((char*) array_SPI_RX, "%*[^F]F%2c%2c%2c%2c%2c", &sTime.Hours, &sTime.Minutes, &sDate.Date, &sDate.Month, &sDate.Year);
+//					  HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BIN);
+//					  HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BIN);
+//					  //*********************//
+//				  }
+//			  }
+			  /* COMO ES UNA PRUEBA DE SOLO MANDAR ELIMINO TODO LO QUE RECIBI */
+			  osPoolFree(mpoolCARGA_Handle, updateCarga);
+			  // Envio los datos analizados task default
+			  //	  osMessagePut(colaCARGA, (uint32_t) updateCarga, osWaitForever);
+		  }
+		  // Liberar memoria asignada para el mensaje recibido
+		  osPoolFree(mpool, pArrayFromCola);
+	  }
   }
   /* USER CODE END comunicacion_spi */
 }
 
 /**
- * @brief  This function is executed in case of error occurrence.
- * @retval None
- */
+  * @brief  This function is executed in case of error occurrence.
+  * @retval None
+  */
 void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
@@ -797,14 +890,14 @@ void Error_Handler(void)
   /* USER CODE END Error_Handler_Debug */
 }
 
-#ifdef USE_FULL_ASSERT
+#ifdef  USE_FULL_ASSERT
 /**
- * @brief  Reports the name of the source file and the source line number
- *         where the assert_param error has occurred.
- * @param  file: pointer to the source file name
- * @param  line: assert_param error line source number
- * @retval None
- */
+  * @brief  Reports the name of the source file and the source line number
+  *         where the assert_param error has occurred.
+  * @param  file: pointer to the source file name
+  * @param  line: assert_param error line source number
+  * @retval None
+  */
 void assert_failed(uint8_t *file, uint32_t line)
 {
   /* USER CODE BEGIN 6 */

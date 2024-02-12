@@ -1,0 +1,32 @@
+!SESSION 2024-02-09 21:06:24.383 -----------------------------------------------
+eclipse.buildId=Version 1.14.0
+java.version=17.0.8.1
+java.vendor=Eclipse Adoptium
+BootLoader constants: OS=win32, ARCH=x86_64, WS=win32, NL=es_AR
+Framework arguments:  C:\Users\nicol\OneDrive\Documents\UNIVERSIDAD TECNOLOGICA NACIONAL\PROYECTO FINAL\carga-electronica-STM32\.project
+Command-line arguments:  -os win32 -ws win32 -arch x86_64 C:\Users\nicol\OneDrive\Documents\UNIVERSIDAD TECNOLOGICA NACIONAL\PROYECTO FINAL\carga-electronica-STM32\.project
+
+!ENTRY com.st.stm32cube.ide.mcu.informationcenter 4 4 2024-02-09 21:06:41.077
+!MESSAGE CubeMX plugin appears to be active, Log4j initialization might be too late.
+
+!ENTRY com.st.stm32cube.ide.mcu.informationcenter 1 1 2024-02-09 21:06:41.078
+!MESSAGE Log4j2 initialized with config file C:\Users\nicol\OneDrive\Documents\UNIVERSIDAD TECNOLOGICA NACIONAL\PROYECTO FINAL\carga-electronica-STM32\.metadata\.log4j2.xml
+
+!ENTRY com.st.stm32cube.ide.mcu.ide 1 1 2024-02-09 21:06:43.037
+!MESSAGE Started RMI Server, listening on port 41337
+!SESSION 2024-02-09 21:07:40.633 -----------------------------------------------
+eclipse.buildId=Version 1.14.0
+java.version=17.0.8.1
+java.vendor=Eclipse Adoptium
+BootLoader constants: OS=win32, ARCH=x86_64, WS=win32, NL=es_AR
+Framework arguments:  C:\Users\nicol\OneDrive\Documents\UNIVERSIDAD TECNOLOGICA NACIONAL\PROYECTO FINAL\carga-electronica-STM32\.project
+Command-line arguments:  -os win32 -ws win32 -arch x86_64 -data C:\Users\nicol\OneDrive\Documents\UNIVERSIDAD TECNOLOGICA NACIONAL\PROYECTO FINAL\carga-electronica-STM32 C:\Users\nicol\OneDrive\Documents\UNIVERSIDAD TECNOLOGICA NACIONAL\PROYECTO FINAL\carga-electronica-STM32\.project
+
+!ENTRY com.st.stm32cube.ide.mcu.informationcenter 4 4 2024-02-09 21:07:43.679
+!MESSAGE CubeMX plugin appears to be active, Log4j initialization might be too late.
+
+!ENTRY com.st.stm32cube.ide.mcu.informationcenter 1 1 2024-02-09 21:07:43.680
+!MESSAGE Log4j2 initialized with config file C:\Users\nicol\OneDrive\Documents\UNIVERSIDAD TECNOLOGICA NACIONAL\PROYECTO FINAL\carga-electronica-STM32\.metadata\.log4j2.xml
+
+!ENTRY com.st.stm32cube.ide.mcu.ide 1 1 2024-02-09 21:07:46.144
+!MESSAGE Started RMI Server, listening on port 41337

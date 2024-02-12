@@ -39,19 +39,24 @@
 /* Private functions ---------------------------------------------------------*/
 static void ADC_set (I2C_HandleTypeDef *hi2c, enum input_to_measure entrada);
 
-float ADC_read_tension (I2C_HandleTypeDef *hi2c){
+float ADC_read_tension (I2C_HandleTypeDef *hi2c, bool rango){
 
 	uint8_t buffer[2];
 	int16_t buffer16;
 
 	ADC_set(hi2c, tension);
-	osDelay(1);
+
+	// Espero que la conversion este lista - verificando pin ready
+	while (HAL_GPIO_ReadPin(ADC_RDY_GPIO_Port, ADC_RDY_Pin)){
+	}
 
 	HAL_I2C_Master_Receive(hi2c, ADC_ADDR, buffer, 2, HAL_MAX_DELAY);
 
 	buffer16 = buffer[0] << 8 | buffer[1];
 
-	return (float)buffer16 * SCALE_VOLTAGE + OFFSET_VOLTAGE; //Devuelvo mV
+	//Devuelvo en mV el valor de tension medido segun la escala en la que se encuentre
+	return rango == false?(float)buffer16 * SCALE_VOLTAGE160 + OFFSET_VOLTAGE160 :\
+			(float)buffer16 * SCALE_VOLTAGE16 + OFFSET_VOLTAGE16;
 }
 
 float ADC_read_current (I2C_HandleTypeDef *hi2c){
@@ -60,7 +65,10 @@ float ADC_read_current (I2C_HandleTypeDef *hi2c){
 	int16_t buffer16;
 
 	ADC_set(hi2c, corriente);
-	osDelay(1);
+
+	// Espero que la conversion este lista - verificando pin ready
+	while (HAL_GPIO_ReadPin(ADC_RDY_GPIO_Port, ADC_RDY_Pin)){
+	}
 
 	HAL_I2C_Master_Receive(hi2c, ADC_ADDR, buffer, 2, HAL_MAX_DELAY);
 
@@ -87,8 +95,33 @@ static void ADC_set (I2C_HandleTypeDef *hi2c, enum input_to_measure entrada){
 	buffer[2] = (uint8_t)(buffer16);
 
 	HAL_I2C_Master_Transmit(hi2c, ADC_ADDR, buffer, 3, HAL_MAX_DELAY);
-	//delay
 
 	buffer[0] = (uint8_t)CONVERSION_REGISTER;
 	HAL_I2C_Master_Transmit(hi2c, ADC_ADDR, buffer, 1, HAL_MAX_DELAY);
+	osDelay(2);
+}
+
+void ADC_set_rdypin(I2C_HandleTypeDef *hi2c){
+
+	uint8_t buffer[3];
+	uint16_t buffer16;
+
+	/* Cargo el registro alto con 0x8000 */
+	buffer[0] = (uint8_t)HI_THRESH_REGISTER;
+	buffer16 = 0x8000;
+
+	buffer[1] = (uint8_t)(buffer16 >> 8);
+	buffer[2] = (uint8_t)(buffer16);
+	HAL_I2C_Master_Transmit(hi2c, ADC_ADDR, buffer, 3, HAL_MAX_DELAY);
+	osDelay(1);
+
+	/* Cargo el registro bajo con 0x0000 */
+	buffer[0] = (uint8_t)LO_THRESH_REGISTER;
+	buffer16 = 0x0000;
+
+	buffer[1] = (uint8_t)(buffer16 >> 8);
+	buffer[2] = (uint8_t)(buffer16);
+	HAL_I2C_Master_Transmit(hi2c, ADC_ADDR, buffer, 3, HAL_MAX_DELAY);
+	osDelay(1);
+
 }

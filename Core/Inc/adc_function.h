@@ -10,6 +10,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "stm32f4xx.h"
+#include "stdbool.h"
 
 #define ADC_OS				OS_START_1CONVERSION
 #define AIN_VOLTAGE			AIN_23
@@ -24,8 +25,10 @@
 
 #define SCALE_CURRENT 		0.9159745969 //mA por cuenta FSR=2.048V
 #define	OFFSET_CURRENT		-231.3344//Offset mA
-#define SCALE_VOLTAGE		5.560236//mV por cuenta FSR=4.096V
-#define OFFSET_VOLTAGE		200.168491//Offset mV
+#define SCALE_VOLTAGE16		1.05856//mV por cuenta FSR=4.096V
+#define SCALE_VOLTAGE160	5.44794//mV por cuenta FSR=4.096V rango 160V
+#define OFFSET_VOLTAGE16	95.30728//Offset mV
+#define OFFSET_VOLTAGE160	203.14259 // Offset mV para rango 160v
 
 
 enum input_to_measure {
@@ -33,8 +36,10 @@ enum input_to_measure {
 	corriente
 };
 
-float ADC_read_tension (I2C_HandleTypeDef *hi2c); //return mV
+float ADC_read_tension (I2C_HandleTypeDef *hi2c, bool rango); //return mV
 
 float ADC_read_current (I2C_HandleTypeDef *hi2c); //return mA
+
+void ADC_set_rdypin(I2C_HandleTypeDef *hi2c); //rdy pin active low
 
 #endif /* INC_ADC_FUNCTION_H_ */
