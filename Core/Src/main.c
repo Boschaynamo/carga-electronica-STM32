@@ -112,6 +112,9 @@ osPoolId mpoolMediciones;
 osMessageQDef(colaMediciones, 5, uint32_t); // Define message queue
 osMessageQId colaMediciones;
 
+osMessageQDef(colaSps, 1, uint32_t); // Define message queue
+osMessageQId colaSps;
+
 // Definiciones para RTC
 RTC_TimeTypeDef sTime;
 RTC_DateTypeDef sDate;
@@ -198,6 +201,9 @@ int main(void)
 
   mpoolMediciones = osPoolCreate(osPool(mpoolMediciones));// create memory pool
   colaMediciones = osMessageCreate(osMessageQ(colaMediciones), NULL); // create colaCARGA queue
+
+  colaSps = osMessageCreate(osMessageQ(colaSps), NULL); // create colaSps queue
+
   /* USER CODE END RTOS_QUEUES */
 
   /* Create the thread(s) */
@@ -607,6 +613,9 @@ void StartDefaultTask(void const * argument)
 	CARGA_HandleTypeDef *CARGAUpdate;
 	osEvent evt;
 
+	uint32_t delay_mediciones = 10;
+	uint8_t i = 2;
+
 	//Puntero a cadena transmision
 	char *p_tx;
 
@@ -628,8 +637,18 @@ void StartDefaultTask(void const * argument)
 	/* Infinite loop */
 	for (;;)
 	{
-		// Tomo las mediciones task medicion_variables (espero 10mS)
-		evt = osMessageGet(colaMediciones, 50);
+		// Verifico en que modo estoy
+		if(CARGAPresente.modo == m_tension || CARGAPresente.modo == m_tension_off || CARGAPresente.modo == m_potencia || CARGAPresente.modo == m_potenica_off){
+			// Modo Tension o Potencia Constante
+			osMessagePut(colaSps,(uint32_t)1, osWaitForever);
+			delay_mediciones = 1;
+		}else{
+			// Modo Corriente, Fusible o Bateria
+			osMessagePut(colaSps,(uint32_t)10, osWaitForever);
+			delay_mediciones = 10;
+		}
+
+		evt = osMessageGet(colaMediciones, delay_mediciones * 5);
 		if(evt.status == osEventMessage){
 			p_mediciones = evt.value.p;
 			//Actualizo las variables de la carga electronica y verifico
@@ -641,19 +660,27 @@ void StartDefaultTask(void const * argument)
 			osPoolFree(mpoolMediciones, p_mediciones);
 		}
 
-		// Inicio comunicacion con ESP32 a traves de task comunicacion_spi
-		p_tx = osPoolAlloc(mpool);
-		if( p_tx != NULL ){
-			// Carga la cadena a transmitir
-			sprintf(p_tx,"hmM%02luC%04luV%04luP%04lu",(uint32_t)CARGAPresente.modo,\
-					(uint32_t)CARGAPresente.valorCorriente/10,\
-					(uint32_t)CARGAPresente.valorTension/10,\
-					(uint32_t)CARGAPresente.valorPotencia/10);
+		// En modo tension o potencia tienen que pasar 10 veces para que se mande al ESP32 / En modo corriente solo 1 vez
+		if( --i == 0){
+			// Inicio comunicacion con ESP32 a traves de task comunicacion_spi
+			p_tx = osPoolAlloc(mpool);
+			if( p_tx != NULL ){
 
-			// Envio la cadena a transmitir task comunicacion_spi
-			osMessagePut(colaSPI_TX, (uint32_t)p_tx, osWaitForever);
+				// Carga la cadena a transmitir
+				sprintf(p_tx,"hmM%02luC%04luV%04luP%04lu",(uint32_t)CARGAPresente.modo,\
+						(uint32_t)CARGAPresente.valorCorriente/10,\
+						(uint32_t)CARGAPresente.valorTension/10,\
+						(uint32_t)CARGAPresente.valorPotencia/10);
+
+				// Envio la cadena a transmitir task comunicacion_spi
+				osMessagePut(colaSPI_TX, (uint32_t)p_tx, osWaitForever);
+			}
+
+			if(CARGAPresente.modo == m_tension || CARGAPresente.modo == m_tension_off || CARGAPresente.modo == m_potencia || CARGAPresente.modo == m_potenica_off){
+				i = 20;
+			}else
+				i = 2;
 		}
-
 
 		//Recibo msj de la tarea comunicacion
 		evt = osMessageGet(colaCARGA, 1);
@@ -665,42 +692,52 @@ void StartDefaultTask(void const * argument)
 				CARGAPresente.modo = CARGAUpdate->modo;
 			}
 
-			switch(CARGAPresente.modo){
-			/* Apago la carga */
-			case m_apagado:
-			case m_bateria_off:
-			case m_corriente_off:
-			case m_fusible_off:
-			case m_potenica_off:
-			case m_tension_off:
-				DAC_set(0);
-				break;
-
-			case m_corriente:
-				/* Modo corriente constante */
-				if(CARGAUpdate->setPoint >= 0 && CARGAUpdate->setPoint <= 30000){
-					CARGAPresente.setPoint = CARGAUpdate->setPoint;
-					DAC_set(CARGAPresente.setPoint/10); //Convierto mA a salida DAC. IMPORTANTISIMO EL /10
-				}
-				break;
-
-			case m_potencia:
-				break;
-
-			case m_tension:
-				break;
-
-			case m_bateria:
-				break;
-			case m_fusible:
-				break;
-
-			default:
-			}
+			CARGAPresente.setPoint = CARGAUpdate->setPoint;
 
 			//Libero el msj de la memoria
 			osPoolFree(mpoolCARGA_Handle, CARGAUpdate);
 			CARGAUpdate = NULL;
+		}
+
+		/* Controlo la carga electronica */
+		switch(CARGAPresente.modo){
+		/* Apago la carga */
+		case m_apagado:
+		case m_bateria_off:
+		case m_corriente_off:
+		case m_fusible_off:
+		case m_potenica_off:
+		case m_tension_off:
+			DAC_set(0);
+			break;
+
+		case m_corriente:
+			/* Modo corriente constante */
+			if(CARGAPresente.setPoint > 30000)
+				CARGAPresente.setPoint = 0;
+			DAC_set(CARGAPresente.setPoint/10); //Convierto mA a salida DAC. IMPORTANTISIMO EL /10
+			break;
+
+		case m_potencia:
+			/* Modo potencia constante */
+			uint32_t aux_corriente=0;
+			if( CARGAPresente.setPoint > 500000){
+				CARGAPresente.setPoint =  0;
+			}
+			if( CARGAPresente.valorTension != 0)
+				aux_corriente =  CARGAPresente.setPoint * 1000 / CARGAPresente.valorTension ;
+			DAC_set(aux_corriente/10);//Convierto mA a salida DAC. IMPORTANTISIMO EL /10
+			break;
+
+		case m_tension:
+			break;
+
+		case m_bateria:
+			break;
+		case m_fusible:
+			break;
+
+		default:
 		}
 
 	}
@@ -722,12 +759,15 @@ void medicion_variables(void const * argument)
   float tension = 0, tension_ant = 0;
   float current = 0, current_ant = 0;
 
+  osEvent evt;
+
   // Estructura mediciones
   MEDICIONES_TypeDef* cargaMediciones;
 
   // Rango 160V False - 16V True
   bool rango = false;
   uint8_t c_rango = 0;
+  uint32_t c = 1;
 
   // Configuro ADS1115 para usar pin de RDY
   ADC_set_rdypin(&hi2c1);
@@ -739,9 +779,14 @@ void medicion_variables(void const * argument)
   {
 	  cargaMediciones = osPoolAlloc(mpoolMediciones);
 
+	  evt = osMessageGet(colaSps, 0);
+	  if(evt.status == osEventMessage){
+		  c = (uint32_t)evt.value.p;
+	  }
+
 	  if ( cargaMediciones != NULL ){
 
-		  for (uint8_t c = 0; c < 10; c++){
+		  for (uint32_t i = 0; i < c; i++){
 			  /* Medicion de Corriente con filtro EMA */
 			  current = current_ant * (1 - 0.4) + 0.4 * ADC_read_current(&hi2c1);
 			  current_ant = current;
@@ -853,7 +898,12 @@ void comunicacion_spi(void const * argument)
 				  // Recibo y guardo setpoint y modo
 				  updateCarga->modo = (enum modos_carga)(((uint8_t)array_SPI_RX[3] - 48) * 10 + ((uint8_t)array_SPI_RX[4] - 48));
 				  sscanf((char*) array_SPI_RX, "%*[^S]S%4lu", &updateCarga->setPoint); //Actualizo el setpoint en el CargaHandle local de esta tarea
-				  updateCarga->setPoint *=100;
+				  if(updateCarga->modo == m_corriente)
+					  updateCarga->setPoint *=100;
+				  else if(updateCarga->modo == m_potencia)
+					  updateCarga->setPoint *= 100;
+				  else if(updateCarga->modo == m_tension)
+					  updateCarga->setPoint *= 100;
 
 				  //Aca hago el trigger
 				  updateCarga->flagTrigger = array_SPI_RX[13];
