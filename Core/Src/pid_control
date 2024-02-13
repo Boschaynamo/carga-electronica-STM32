@@ -15,65 +15,56 @@
 /* Private typedef -----------------------------------------------------------*/
 
 /* Private define ------------------------------------------------------------*/
-#define PID_Ax 0.05
-#define PID_Bx 0.00001
-#define PID_Cx 0.1
+#define PID_A 0.05
+#define PID_B 0.00001
+#define PID_C 0.1
 #define PID_MAX 2000
 #define PID_MIN -2000
 #define PID_SETPOINT 0.0
-#define MAX_V 12.0
-#define MIN_X 3.1
-
-#define FACTOR_X 0.00516
-#define FACTOR_Y 0.00168
-#define UART_BAUDRATE 115200
-#define PID_SAMPLING 100000
-
 
 /* Private macro -------------------------------------------------------------*/
 
 /* Private variable ----------------------------------------------------------*/
 /* Constantes PID Horizontal*/
-float ax,bx,cx;                         			//constantes del PID voltaje
-float rTx,eTx,iTx,dTx,yTx,yT0x,uTx,iT0x,eT0x;   	//variables de ecuaciones de PID voltaje
-float pidx_max1,pidx_min1;                			//límites máximo y mínimo de control.
+float a,b,c;                       		//constantes del PID voltaje
+float rT,eT,iT,dT,yT,yT0,uT,iT0,eT0;   	//variables de ecuaciones de PID voltaje
+float pid_max,pid_min;             		//límites máximo y mínimo de control.
 
-pidx_min1 = PID_MIN;
-pidx_max1 = PID_MAX;
-iT0x=0.0;
-eT0x=0.0;
+pid_min = PID_MIN;
+pid_max = PID_MAX;
+iT0=0.0;
+eT0=0.0;
 
-rTx=PID_SETPOINT;
+rT=PID_SETPOINT;
 
-ax= PID_Ax;
-bx= PID_Bx;
-cx= PID_Cx;
+a= PID_A;
+b= PID_B;
+c= PID_C;
 
 /* Private functions ---------------------------------------------------------*/
 void PID_voltage (float voltage){
 
+	yT = //Señal de corriente
 
-	yTx = //Señal de voltaje
+	eT=rT-yT;                 //Cálculo error corriente
 
-	eTx=rTx-yTx;                 //Cálculo error voltaje
+	iT=b*(eT+eT0)+iT0;      //Cálculo del término integral corriente
 
-	iTx=bx*(eTx+eT0x)+iT0x;      //Cálculo del término integral voltaje
-
-	/*Limite termino integral voltage*/
-	if (iTx>pidx_max1) iTx=pidx_max1;            //Salida integral si es mayor que el MAX
-	else if (iTx<pidx_min1) iTx=pidx_min1;       //Salida integral si es menor que el MIN
+	/*Limite termino integral corriente*/
+	if (iT>pid_max) iT=pid_max;            //Salida integral si es mayor que el MAX
+	else if (iT<pid_min) iT=pid_min;       //Salida integral si es menor que el MIN
 
 
-	dTx=-cx*(yTx-yT0x);			 //Cálculo del término derivativo voltage
-	uTx=iTx+ax*eTx+dTx;            //Cálculo de la salida PID voltage
+	dT=-c*(yT-yT0);			 //Cálculo del término derivativo corriente
+	uT=iT+a*eT+dT;            //Cálculo de la salida PID corriente
 
-	/*Limite PID voltage*/
-	if (uTx>pidx_max1) uTx=pidx_max1;           //Salida PID si es mayor que el MAX
-	else if (uTx<pidx_min1) uTx=pidx_min1;      //Salida PID si es menor que el MIN
+	/*Limite PID corriente*/
+	if (uT>pid_max) uT=pid_max;           //Salida PID si es mayor que el MAX
+	else if (uT<pid_min) uT=pid_min;      //Salida PID si es menor que el MIN
 
 	/* Guardar variables */
-	iT0x=iTx;
-	eT0x=eTx;
-	yT0x=yTx;
-
+	iT0=iT;
+	eT0=eT;
+	yT0=yT;
+	
 }

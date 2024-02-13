@@ -46,12 +46,10 @@ enum modos_carga
   m_fusible,
   m_bateria
 };
-
 /* Estructura estado modo de la carga electronica */
 /* valor para corriente_constante en mA */
 typedef struct
 {
-
   enum modos_carga modo;         /* Modo de trabajo de la carga electronica */
   uint32_t valorTension;   /* Valor de Tension de la carga electronica */
   uint32_t valorCorriente; /* Valor de Corriente de la carga electronica */
@@ -62,11 +60,18 @@ typedef struct
 
 } CARGA_HandleTypeDef;
 
-/* Estructura estado modo de la carga electronica */
+/* Estructura mediciones de la carga electronica */
 typedef struct{
 	float tension;
 	float corriente;
 } MEDICIONES_TypeDef;
+
+/* Estructura pid */
+typedef struct{
+	uint32_t referencia;
+	uint32_t señal;
+
+} PID_TypeDef;
 
 /* USER CODE END PTD */
 
@@ -75,6 +80,14 @@ typedef struct{
 // Definiciones DAC - MCP4725
 #define MCP4725_ADDR 0b1100000 << 1
 #define MASK_DAC_READ 0b00001111
+
+// Definiciones PID
+#define PID_A 0.25
+#define PID_B 0.02
+#define PID_C 0
+#define PID_MAX 3000
+#define PID_MIN 0
+#define PID_SETPOINT 0.0
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -94,6 +107,7 @@ SPI_HandleTypeDef hspi2;
 osThreadId defaultTaskHandle;
 osThreadId medicionHandle;
 osThreadId comunicacionHandle;
+osThreadId pid_taskHandle;
 /* USER CODE BEGIN PV */
 
 /* Memory pool para comunicacion spi */
@@ -112,8 +126,10 @@ osPoolId mpoolMediciones;
 osMessageQDef(colaMediciones, 5, uint32_t); // Define message queue
 osMessageQId colaMediciones;
 
-osMessageQDef(colaSps, 1, uint32_t); // Define message queue
-osMessageQId colaSps;
+osPoolDef(mpoolPID, 1, PID_TypeDef); // Define memory pool
+osPoolId mpoolPID;
+osMessageQDef(colaPID,1,uint32_t); // Define message queue
+osMessageQId colaPID;
 
 // Definiciones para RTC
 RTC_TimeTypeDef sTime;
@@ -131,6 +147,7 @@ static void MX_RTC_Init(void);
 void StartDefaultTask(void const * argument);
 void medicion_variables(void const * argument);
 void comunicacion_spi(void const * argument);
+void pid_control(void const * argument);
 
 /* USER CODE BEGIN PFP */
 /* Prototipos funciones DAC MCP4725 I2C */
@@ -202,8 +219,8 @@ int main(void)
   mpoolMediciones = osPoolCreate(osPool(mpoolMediciones));// create memory pool
   colaMediciones = osMessageCreate(osMessageQ(colaMediciones), NULL); // create colaCARGA queue
 
-  colaSps = osMessageCreate(osMessageQ(colaSps), NULL); // create colaSps queue
-
+  mpoolPID = osPoolCreate(osPool(mpoolPID));// create memory pool
+  colaPID = osMessageCreate(osMessageQ(colaPID), NULL);// create colaPID queue
   /* USER CODE END RTOS_QUEUES */
 
   /* Create the thread(s) */
@@ -218,6 +235,10 @@ int main(void)
   /* definition and creation of comunicacion */
   osThreadDef(comunicacion, comunicacion_spi, osPriorityBelowNormal, 0, 256);
   comunicacionHandle = osThreadCreate(osThread(comunicacion), NULL);
+
+  /* definition and creation of pid_task */
+  osThreadDef(pid_task, pid_control, osPriorityAboveNormal, 0, 128);
+  pid_taskHandle = osThreadCreate(osThread(pid_task), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -613,14 +634,20 @@ void StartDefaultTask(void const * argument)
 	CARGA_HandleTypeDef *CARGAUpdate;
 	osEvent evt;
 
-	uint32_t delay_mediciones = 10;
-	uint8_t i = 2;
+	//potencia ant para filtro ema
+	uint32_t potencia_ant = 0;
+
+	// Contador cada 20 mediciones envio a pantalla aprox 100ms
+	uint8_t i = 20;
 
 	//Puntero a cadena transmision
 	char *p_tx;
 
 	//Puntero a mediciones de V e I
 	MEDICIONES_TypeDef* p_mediciones;
+
+	//Puntero a estructura pid
+	PID_TypeDef* p_pid = NULL;
 
 	// Inicializo variable carga electronica
 	CARGAPresente.modo =  m_apagado;
@@ -637,25 +664,15 @@ void StartDefaultTask(void const * argument)
 	/* Infinite loop */
 	for (;;)
 	{
-		// Verifico en que modo estoy
-		if(CARGAPresente.modo == m_tension || CARGAPresente.modo == m_tension_off || CARGAPresente.modo == m_potencia || CARGAPresente.modo == m_potenica_off){
-			// Modo Tension o Potencia Constante
-			osMessagePut(colaSps,(uint32_t)1, osWaitForever);
-			delay_mediciones = 1;
-		}else{
-			// Modo Corriente, Fusible o Bateria
-			osMessagePut(colaSps,(uint32_t)10, osWaitForever);
-			delay_mediciones = 10;
-		}
-
-		evt = osMessageGet(colaMediciones, delay_mediciones * 5);
+		evt = osMessageGet(colaMediciones, 5);
 		if(evt.status == osEventMessage){
 			p_mediciones = evt.value.p;
 			//Actualizo las variables de la carga electronica y verifico
 			CARGAPresente.valorCorriente = (uint32_t)p_mediciones->corriente;
 			CARGAPresente.valorTension = (uint32_t)p_mediciones->tension;
-			CARGAPresente.valorPotencia = (uint32_t)(p_mediciones->corriente * p_mediciones->tension)/1000;
-
+			CARGAPresente.valorPotencia = potencia_ant * (1-0.4)\
+					+ 0.4 *(uint32_t)(p_mediciones->corriente * p_mediciones->tension)/1000;
+			potencia_ant = CARGAPresente.valorPotencia;
 			// Liberar memoria asignada para el mensaje
 			osPoolFree(mpoolMediciones, p_mediciones);
 		}
@@ -675,11 +692,8 @@ void StartDefaultTask(void const * argument)
 				// Envio la cadena a transmitir task comunicacion_spi
 				osMessagePut(colaSPI_TX, (uint32_t)p_tx, osWaitForever);
 			}
-
-			if(CARGAPresente.modo == m_tension || CARGAPresente.modo == m_tension_off || CARGAPresente.modo == m_potencia || CARGAPresente.modo == m_potenica_off){
-				i = 20;
-			}else
-				i = 2;
+			// Reseteo contador
+			i = 20;
 		}
 
 		//Recibo msj de la tarea comunicacion
@@ -691,7 +705,7 @@ void StartDefaultTask(void const * argument)
 			if(CARGAPresente.modo != CARGAUpdate->modo){
 				CARGAPresente.modo = CARGAUpdate->modo;
 			}
-
+			//Cargo el nuevo valor del setpoint
 			CARGAPresente.setPoint = CARGAUpdate->setPoint;
 
 			//Libero el msj de la memoria
@@ -699,45 +713,59 @@ void StartDefaultTask(void const * argument)
 			CARGAUpdate = NULL;
 		}
 
-		/* Controlo la carga electronica */
-		switch(CARGAPresente.modo){
-		/* Apago la carga */
-		case m_apagado:
-		case m_bateria_off:
-		case m_corriente_off:
-		case m_fusible_off:
-		case m_potenica_off:
-		case m_tension_off:
-			DAC_set(0);
-			break;
+		//Reservo espacio para enviar msj a cola PID
+		p_pid = osPoolAlloc(mpoolPID);
 
-		case m_corriente:
-			/* Modo corriente constante */
-			if(CARGAPresente.setPoint > 30000)
-				CARGAPresente.setPoint = 0;
-			DAC_set(CARGAPresente.setPoint/10); //Convierto mA a salida DAC. IMPORTANTISIMO EL /10
-			break;
+		if( p_pid != NULL){
 
-		case m_potencia:
-			/* Modo potencia constante */
-			uint32_t aux_corriente=0;
-			if( CARGAPresente.setPoint > 500000){
-				CARGAPresente.setPoint =  0;
+			//Guardo el valor de corriente en el mpool
+			p_pid->señal = CARGAPresente.valorCorriente;
+
+			/* Controlo la carga electronica */
+			switch(CARGAPresente.modo){
+			/* Apago la carga */
+			case m_apagado:
+			case m_bateria_off:
+			case m_corriente_off:
+			case m_fusible_off:
+			case m_potenica_off:
+			case m_tension_off:
+				DAC_set(0);
+				p_pid->referencia = 0;
+				break;
+
+			case m_corriente:
+				/* Modo corriente constante */
+				if(CARGAPresente.setPoint > 30000)
+					CARGAPresente.setPoint = 0;
+				//DAC_set(CARGAPresente.setPoint/10); //Convierto mA a salida DAC. IMPORTANTISIMO EL /10
+				p_pid->referencia = CARGAPresente.setPoint;
+				break;
+
+			case m_potencia:
+				/* Modo potencia constante */
+				uint32_t aux_corriente=0;
+				if( CARGAPresente.setPoint > 500000){
+					CARGAPresente.setPoint =  0;
+				}
+				if( CARGAPresente.valorTension != 0)
+					aux_corriente =  CARGAPresente.setPoint * 1000 / CARGAPresente.valorTension ;
+				//DAC_set(aux_corriente/10);//Convierto mA a salida DAC. IMPORTANTISIMO EL /10
+				p_pid->referencia = aux_corriente;
+				break;
+
+			case m_tension:
+				break;
+
+			case m_bateria:
+				break;
+			case m_fusible:
+				break;
+
+			default:
 			}
-			if( CARGAPresente.valorTension != 0)
-				aux_corriente =  CARGAPresente.setPoint * 1000 / CARGAPresente.valorTension ;
-			DAC_set(aux_corriente/10);//Convierto mA a salida DAC. IMPORTANTISIMO EL /10
-			break;
 
-		case m_tension:
-			break;
-
-		case m_bateria:
-			break;
-		case m_fusible:
-			break;
-
-		default:
+			osMessagePut(colaPID, (uint32_t)p_pid, osWaitForever);
 		}
 
 	}
@@ -759,15 +787,12 @@ void medicion_variables(void const * argument)
   float tension = 0, tension_ant = 0;
   float current = 0, current_ant = 0;
 
-  osEvent evt;
-
   // Estructura mediciones
   MEDICIONES_TypeDef* cargaMediciones;
 
   // Rango 160V False - 16V True
   bool rango = false;
   uint8_t c_rango = 0;
-  uint32_t c = 1;
 
   // Configuro ADS1115 para usar pin de RDY
   ADC_set_rdypin(&hi2c1);
@@ -779,62 +804,55 @@ void medicion_variables(void const * argument)
   {
 	  cargaMediciones = osPoolAlloc(mpoolMediciones);
 
-	  evt = osMessageGet(colaSps, 0);
-	  if(evt.status == osEventMessage){
-		  c = (uint32_t)evt.value.p;
-	  }
-
 	  if ( cargaMediciones != NULL ){
 
-		  for (uint32_t i = 0; i < c; i++){
-			  /* Medicion de Corriente con filtro EMA */
-			  current = current_ant * (1 - 0.4) + 0.4 * ADC_read_current(&hi2c1);
-			  current_ant = current;
+		  /* Medicion de Corriente con filtro EMA */
+		  current = current_ant * (1 - 0.4) + 0.4 * ADC_read_current(&hi2c1);
+		  current_ant = current;
 
-			  /* Medicion de Tension con filtro EMA*/
-			  tension = tension_ant * (1 - 0.6) + 0.6 * ADC_read_tension(&hi2c1, rango);
-			  tension_ant = tension;
+		  /* Medicion de Tension con filtro EMA*/
+		  tension = tension_ant * (1 - 0.6) + 0.6 * ADC_read_tension(&hi2c1, rango);
+		  tension_ant = tension;
 
-			  // Si la tension < 0 normalizo
-			  if (tension < 0)
-				  tension = 0;
+		  // Si la tension < 0 normalizo
+		  if (tension < 0)
+			  tension = 0;
 
-			  // Verificar en que rango estamos de tension
-			  if(rango == true){
-				  // Rango 16V
+		  // Verificar en que rango estamos de tension
+		  if(rango == true){
+			  // Rango 16V
 
-				  if( tension > 16000){
-					  // Tension mayor al rango min
-					  c_rango++;
+			  if( tension > 16000){
+				  // Tension mayor al rango min
+				  c_rango++;
 
-					  if(c_rango > 2){
-						  //Lo supero 3 veces consecutiva(6ms) -> cambio rango a 160V
-						  rango = false;
-						  HAL_GPIO_WritePin(VSCALE_GPIO_Port, VSCALE_Pin, GPIO_PIN_RESET);
-						  c_rango = 0;
-					  }
-				  }
-				  else // Tension menor al rango max
+				  if(c_rango > 2){
+					  //Lo supero 3 veces consecutiva(6ms) -> cambio rango a 160V
+					  rango = false;
+					  HAL_GPIO_WritePin(VSCALE_GPIO_Port, VSCALE_Pin, GPIO_PIN_RESET);
 					  c_rango = 0;
-
-			  } else {
-				  // Rango 160V
-
-				  if(tension < 15500){
-					  // Tension menor al rango min
-					  c_rango++;
-
-					  if(c_rango > 20){
-						  // Estuvo por debajo 20 veces consecutivas (40ms)
-						  // -> Cambio rango a 16V.
-						  rango = true;
-						  HAL_GPIO_WritePin(VSCALE_GPIO_Port, VSCALE_Pin, GPIO_PIN_SET);
-						  c_rango = 0;
-					  }
 				  }
-				  else
-					  c_rango = 0;
 			  }
+			  else // Tension menor al rango max
+				  c_rango = 0;
+
+		  } else {
+			  // Rango 160V
+
+			  if(tension < 15500){
+				  // Tension menor al rango min
+				  c_rango++;
+
+				  if(c_rango > 20){
+					  // Estuvo por debajo 20 veces consecutivas (40ms)
+					  // -> Cambio rango a 16V.
+					  rango = true;
+					  HAL_GPIO_WritePin(VSCALE_GPIO_Port, VSCALE_Pin, GPIO_PIN_SET);
+					  c_rango = 0;
+				  }
+			  }
+			  else
+				  c_rango = 0;
 		  }
 
 		  // Bloqueo la tarea 5ms * 10 veces = 50mS
@@ -937,6 +955,81 @@ void comunicacion_spi(void const * argument)
 	  }
   }
   /* USER CODE END comunicacion_spi */
+}
+
+/* USER CODE BEGIN Header_pid_control */
+/**
+* @brief Function implementing the pid_task thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_pid_control */
+void pid_control(void const * argument)
+{
+  /* USER CODE BEGIN pid_control */
+	float a,b,c;                       		//constantes del PID voltaje
+	float rT,eT,iT,dT,yT,yT0,uT,iT0,eT0;   	//variables de ecuaciones de PID voltaje
+	float pid_max,pid_min;             		//límites máximo y mínimo de control.
+
+	osEvent evt;
+
+	//Puntero a estructura pid
+	PID_TypeDef *p = NULL;
+
+	pid_min = PID_MIN;
+	pid_max = PID_MAX;
+	iT0 = 0.0;
+	eT0 = 0.0;
+
+	rT = PID_SETPOINT;
+
+	a = PID_A;
+	b = PID_B;
+	c = PID_C;
+
+	/* Infinite loop */
+	for(;;)
+	{
+		evt = osMessageGet(colaPID, 0);
+
+		if(evt.status == osEventMessage){
+
+			p = evt.value.p;
+			yT = (float)p->señal; //Señal de corriente
+			rT = (float)p->referencia; //Señal de referencia
+
+			osPoolFree(mpoolPID, p);
+		}
+
+		eT = rT - yT; //Cálculo error corriente
+
+		iT = b * ( eT + eT0 ) + iT0; //Cálculo del término integral corriente
+
+		/*Limite termino integral corriente*/
+		if ( iT > pid_max )
+			iT = pid_max; //Salida integral si es mayor que el MAX
+		else if ( iT < pid_min )
+			iT = pid_min; //Salida integral si es menor que el MIN
+
+		dT = -c * ( yT - yT0 );	//Cálculo del término derivativo corriente
+		uT = iT + a * eT + dT; //Cálculo de la salida PID corriente
+
+		/*Limite PID corriente*/
+		if ( uT > pid_max )
+			uT = pid_max;           //Salida PID si es mayor que el MAX
+		else if ( uT < pid_min )
+			uT = pid_min;      //Salida PID si es menor que el MIN
+
+		/* Guardar variables */
+		iT0 = iT;
+		eT0 = eT;
+		yT0 = yT;
+
+		DAC_set(uT);
+
+		osDelay(5);
+	}
+  /* USER CODE END pid_control */
 }
 
 /**
