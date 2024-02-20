@@ -1,6 +1,8 @@
 .settings
 Debug
-Drivers
+Drivers/Debug
+Drivers/STM32F4xx_HAL_DRIVER
+Drivers/CMSIS
 Middlewares
 *.launch
 *.ld

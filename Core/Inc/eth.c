@@ -129,7 +129,6 @@ void wep_define_func(void)
 
 	// Registro nueva ruta
 	reg_httpServer_webContent((uint8_t *)"grafico.html", (uint8_t *)grafico_page);
-	reg_httpServer_webContent((uint8_t *)"data.html", (uint8_t *)jsonStringToSend);
 
 }
 
