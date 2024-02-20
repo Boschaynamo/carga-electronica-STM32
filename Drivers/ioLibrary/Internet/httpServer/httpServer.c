@@ -465,7 +465,7 @@ static void send_http_response_cgi(uint8_t s, uint8_t * buf, uint8_t * http_body
 #ifdef _HTTPSERVER_DEBUG_
 	printf("> HTTPSocket[%d] : HTTP Response Header + Body - CGI\r\n", s);
 #endif
-	send_len = sprintf((char *)buf, "%s%d\r\n\r\n%s", RES_CGIHEAD_OK, file_len, http_body);
+	send_len = sprintf((char *)buf, "%s%d\r\n\r\n%s", RES_JSONHEAD_OK, file_len, http_body); ////CAMBIE DE RES_CGIHEAD_OK A RES_JSONHEAD_OK PARA QUE FUNCIONE
 #ifdef _HTTPSERVER_DEBUG_
 	printf("> HTTPSocket[%d] : HTTP Response Header + Body - send len [ %d ]byte\r\n", s, send_len);
 #endif
