@@ -200,18 +200,18 @@ int main(void)
   MX_RTC_Init();
   MX_SPI1_Init();
   /* USER CODE BEGIN 2 */
-//  while(1){
-//
-//	  /* Inicializo ethernet */
-//	  eth_start();
-//
-//
-//	  while(1){
-//		  //HTTP ETH PRUEBA
-//		  for(uint8_t j = 0; j < 4; j++)	httpServer_run(j); 	// HTTP Server handler
-//		  //Una vez que corro el handler, checkeo que ya me haya pedido la pagina de graficos, si es asi comienzo a enviar datos.
-//	  }
-//  }
+  while(1){
+
+	  /* Inicializo ethernet */
+	  eth_start();
+
+
+	  while(1){
+		  //HTTP ETH PRUEBA
+		  for(uint8_t j = 0; j < 4; j++)	httpServer_run(j); 	// HTTP Server handler
+		  //Una vez que corro el handler, checkeo que ya me haya pedido la pagina de graficos, si es asi comienzo a enviar datos.
+	  }
+  }
   /* USER CODE END 2 */
 
   /* USER CODE BEGIN RTOS_MUTEX */
