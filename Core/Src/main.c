@@ -102,6 +102,7 @@ I2C_HandleTypeDef hi2c1;
 
 RTC_HandleTypeDef hrtc;
 
+SPI_HandleTypeDef hspi1;
 SPI_HandleTypeDef hspi2;
 
 osThreadId defaultTaskHandle;
@@ -144,6 +145,7 @@ static void MX_ADC1_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_SPI2_Init(void);
 static void MX_RTC_Init(void);
+static void MX_SPI1_Init(void);
 void StartDefaultTask(void const * argument);
 void medicion_variables(void const * argument);
 void comunicacion_spi(void const * argument);
@@ -153,6 +155,10 @@ void pid_control(void const * argument);
 /* Prototipos funciones DAC MCP4725 I2C */
 void DAC_init(void);
 void DAC_set(float setPoint);
+
+/* Prototipos funciones ethernet */
+extern void httpServer_run(uint8_t seqnum);
+extern void eth_start(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -192,8 +198,20 @@ int main(void)
   MX_I2C1_Init();
   MX_SPI2_Init();
   MX_RTC_Init();
+  MX_SPI1_Init();
   /* USER CODE BEGIN 2 */
-
+//  while(1){
+//
+//	  /* Inicializo ethernet */
+//	  eth_start();
+//
+//
+//	  while(1){
+//		  //HTTP ETH PRUEBA
+//		  for(uint8_t j = 0; j < 4; j++)	httpServer_run(j); 	// HTTP Server handler
+//		  //Una vez que corro el handler, checkeo que ya me haya pedido la pagina de graficos, si es asi comienzo a enviar datos.
+//	  }
+//  }
   /* USER CODE END 2 */
 
   /* USER CODE BEGIN RTOS_MUTEX */
@@ -241,7 +259,7 @@ int main(void)
   pid_taskHandle = osThreadCreate(osThread(pid_task), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
-  /* add threads, ... */
+//  /* add threads, ... */
   /* USER CODE END RTOS_THREADS */
 
   /* Start scheduler */
@@ -430,7 +448,7 @@ static void MX_RTC_Init(void)
 
   /** Initialize RTC and set the Time and Date
   */
-  sTime.Hours = 20;
+  sTime.Hours = 23;
   sTime.Minutes = 17;
   sTime.Seconds = 10;
   sTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
@@ -440,8 +458,8 @@ static void MX_RTC_Init(void)
     Error_Handler();
   }
   sDate.WeekDay = RTC_WEEKDAY_MONDAY;
-  sDate.Month = RTC_MONTH_JANUARY;
-  sDate.Date = 31;
+  sDate.Month = RTC_MONTH_FEBRUARY;
+  sDate.Date = 12;
   sDate.Year = 24;
 
   if (HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BIN) != HAL_OK)
@@ -451,6 +469,44 @@ static void MX_RTC_Init(void)
   /* USER CODE BEGIN RTC_Init 2 */
 
   /* USER CODE END RTC_Init 2 */
+
+}
+
+/**
+  * @brief SPI1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_SPI1_Init(void)
+{
+
+  /* USER CODE BEGIN SPI1_Init 0 */
+
+  /* USER CODE END SPI1_Init 0 */
+
+  /* USER CODE BEGIN SPI1_Init 1 */
+
+  /* USER CODE END SPI1_Init 1 */
+  /* SPI1 parameter configuration*/
+  hspi1.Instance = SPI1;
+  hspi1.Init.Mode = SPI_MODE_MASTER;
+  hspi1.Init.Direction = SPI_DIRECTION_2LINES;
+  hspi1.Init.DataSize = SPI_DATASIZE_8BIT;
+  hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
+  hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
+  hspi1.Init.NSS = SPI_NSS_SOFT;
+  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_32;
+  hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
+  hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
+  hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
+  hspi1.Init.CRCPolynomial = 10;
+  if (HAL_SPI_Init(&hspi1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN SPI1_Init 2 */
+
+  /* USER CODE END SPI1_Init 2 */
 
 }
 
@@ -506,20 +562,37 @@ static void MX_GPIO_Init(void)
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOH_CLK_ENABLE();
-  __HAL_RCC_GPIOB_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(ETH_RST_GPIO_Port, ETH_RST_Pin, GPIO_PIN_SET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOA, ETH_CS_Pin|ISCALE_Pin|VSCALE_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, ISCALE_Pin|VSCALE_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pins : TRIGGER_Pin CONEXT_Pin EMOS2_Pin */
   GPIO_InitStruct.Pin = TRIGGER_Pin|CONEXT_Pin|EMOS2_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : ETH_RST_Pin */
+  GPIO_InitStruct.Pin = ETH_RST_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+  HAL_GPIO_Init(ETH_RST_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : ETH_CS_Pin */
+  GPIO_InitStruct.Pin = ETH_CS_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+  HAL_GPIO_Init(ETH_CS_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : EMOS1_Pin */
   GPIO_InitStruct.Pin = EMOS1_Pin;
@@ -634,6 +707,9 @@ void StartDefaultTask(void const * argument)
 	CARGA_HandleTypeDef *CARGAUpdate;
 	osEvent evt;
 
+	//flag fecha actualizada
+	bool fecha_act = false;
+
 	//potencia ant para filtro ema
 	uint32_t potencia_ant = 0;
 
@@ -691,6 +767,18 @@ void StartDefaultTask(void const * argument)
 
 				// Envio la cadena a transmitir task comunicacion_spi
 				osMessagePut(colaSPI_TX, (uint32_t)p_tx, osWaitForever);
+			}
+
+			if(!fecha_act){
+				p_tx = osPoolAlloc(mpool);
+				if( p_tx != NULL ){
+					sprintf(p_tx,"hmU%02d%02d%02d%02d%02d",sTime.Hours,\
+							sTime.Minutes, sDate.Date, sDate.Month, sDate.Year);
+
+					// Envio la cadena a transmitir task comunicacion_spi
+					osMessagePut(colaSPI_TX, (uint32_t)p_tx, osWaitForever);
+				}
+				fecha_act = true;
 			}
 			// Reseteo contador
 			i = 20;
@@ -882,84 +970,90 @@ void medicion_variables(void const * argument)
 void comunicacion_spi(void const * argument)
 {
   /* USER CODE BEGIN comunicacion_spi */
-  uint8_t array_SPI_RX[21] = "soyTuPuntero";
+	uint8_t array_SPI_RX[21] = "soyTuPuntero";
 
-  CARGA_HandleTypeDef *updateCarga;
+	CARGA_HandleTypeDef *updateCarga;
 
-  // Definiciones de cola
-  char *pArrayFromCola;
-  osEvent evt;
+	//Obtengo fecha y hora guardados en RTC
+	HAL_RTC_GetTime(&hrtc, &sTime, RTC_FORMAT_BIN);
+	HAL_RTC_GetDate(&hrtc, &sDate, RTC_FORMAT_BIN);
 
-  /* Infinite loop */
-  for (;;)
-  {
-	  // Recibo msj a transmitir de la task default
-	  evt = osMessageGet(colaSPI_TX, osWaitForever);
+	// Definiciones de cola
+	char *pArrayFromCola;
+	osEvent evt;
 
-	  // Respondo en base a los datos recibidos del ESP32
-	  if (evt.status == osEventMessage)
-	  {
-		  pArrayFromCola = evt.value.p;
+	/* Infinite loop */
+	for (;;)
+	{
+		// Recibo msj a transmitir de la task default
+		evt = osMessageGet(colaSPI_TX, osWaitForever);
+		// Respondo en base a los datos recibidos del ESP32
+		if (evt.status == osEventMessage)
+		{
+			pArrayFromCola = evt.value.p;
 
-		  // Reservo un espacio de memoria para asignar los datos recibidos
-		  updateCarga = osPoolAlloc(mpoolCARGA_Handle);
+			// Reservo un espacio de memoria para asignar los datos recibidos
+			updateCarga = osPoolAlloc(mpoolCARGA_Handle);
 
-		  if( updateCarga != NULL){
+			if( updateCarga != NULL){
 
-			  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_RESET);
-			  HAL_SPI_TransmitReceive(&hspi2, (uint8_t*)pArrayFromCola, array_SPI_RX, 21, HAL_MAX_DELAY);
-			  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_SET);
+				HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_RESET);
+				HAL_SPI_TransmitReceive(&hspi2, (uint8_t*)pArrayFromCola, array_SPI_RX, 21, HAL_MAX_DELAY);
+				HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_SET);
 
-			  // Interpreto cadena recibida
-			  if (array_SPI_RX[0] == 'r' && array_SPI_RX[1] == 's')
-			  {
-				  // Recibo y guardo setpoint y modo
-				  updateCarga->modo = (enum modos_carga)(((uint8_t)array_SPI_RX[3] - 48) * 10 + ((uint8_t)array_SPI_RX[4] - 48));
-				  sscanf((char*) array_SPI_RX, "%*[^S]S%4lu", &updateCarga->setPoint); //Actualizo el setpoint en el CargaHandle local de esta tarea
-				  if(updateCarga->modo == m_corriente)
-					  updateCarga->setPoint *=100;
-				  else if(updateCarga->modo == m_potencia)
-					  updateCarga->setPoint *= 100;
-				  else if(updateCarga->modo == m_tension)
-					  updateCarga->setPoint *= 100;
+				// Interpreto cadena recibida
+				if (array_SPI_RX[0] == 'r' && array_SPI_RX[1] == 's')
+				{
+					// Recibo y guardo setpoint y modo
+					updateCarga->modo = (enum modos_carga)(((uint8_t)array_SPI_RX[3] - 48) * 10 + ((uint8_t)array_SPI_RX[4] - 48));
+					sscanf((char*) array_SPI_RX, "%*[^S]S%4lu", &updateCarga->setPoint); //Actualizo el setpoint en el CargaHandle local de esta tarea
+					if(updateCarga->modo == m_corriente)
+						updateCarga->setPoint *=100;
+					else if(updateCarga->modo == m_potencia)
+						updateCarga->setPoint *= 100;
+					else if(updateCarga->modo == m_tension)
+						updateCarga->setPoint *= 100;
 
-				  //Aca hago el trigger
-				  updateCarga->flagTrigger = array_SPI_RX[13];
-				  if (array_SPI_RX[13] == '1')
-				  {
-					  // TRIGGER ACTIVADO Y LISTO PARA EL SERVICIO
-					  __NOP();
-				  }
+					//Aca hago el trigger
+					updateCarga->flagTrigger = array_SPI_RX[13];
+					if (array_SPI_RX[13] == '1')
+					{
+						// TRIGGER ACTIVADO Y LISTO PARA EL SERVICIO
+						__NOP();
+					}
 
-				  // Si hay que modificar fecha
-				  updateCarga->flagFecha = array_SPI_RX[11];
-				  if (array_SPI_RX[11] == '1')
-				  {
-					  uint8_t arrayFecha[21] = "hmF";
-					  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_RESET);
-					  HAL_SPI_TransmitReceive(&hspi2, arrayFecha, array_SPI_RX, 21, HAL_MAX_DELAY);
-					  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_SET);
+					// Si hay que modificar fecha
+					updateCarga->flagFecha = array_SPI_RX[11];
+					if (array_SPI_RX[11] == '1')
+					{
+						uint8_t arrayFecha[21] = "hmF";
+						HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_RESET);
+						HAL_SPI_TransmitReceive(&hspi2, arrayFecha, array_SPI_RX, 21, HAL_MAX_DELAY);
+						HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_SET);
 
-					  //Aca guardo la fecha y hora
-					  sscanf((char*) array_SPI_RX, "%*[^F]F%2c%2c%2c%2c%2c", &sTime.Hours, &sTime.Minutes, &sDate.Date, &sDate.Month, &sDate.Year);
-					  HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BIN);
-					  HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BIN);
-				  }
-			  }
+						//Aca guardo la fecha y hora
+						sscanf((char*) array_SPI_RX, "%*[^F]F%2c%2c%2c%2c%2c", &sTime.Hours, &sTime.Minutes, &sDate.Date, &sDate.Month, &sDate.Year);
+						HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BIN);
+						HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BIN);
+					}
+				}
 
-			  // Envio los datos analizados task default
-			  osMessagePut(colaCARGA, (uint32_t) updateCarga, osWaitForever);
-		  }
-		  // Liberar memoria asignada para el mensaje recibido
-		  osPoolFree(mpool, pArrayFromCola);
-	  }
-  }
+				// Envio los datos analizados task default
+				osMessagePut(colaCARGA, (uint32_t) updateCarga, osWaitForever);
+			}
+			// Liberar memoria asignada para el mensaje recibido
+			osPoolFree(mpool, pArrayFromCola);
+
+			osDelay(30);
+		}
+	}
+
   /* USER CODE END comunicacion_spi */
 }
 
 /* USER CODE BEGIN Header_pid_control */
 /**
-* @brief Function implementing the pid_task thread.
+ * @brief Function implementing the pid_task thread.
 * @param argument: Not used
 * @retval None
 */
@@ -1001,31 +1095,36 @@ void pid_control(void const * argument)
 			osPoolFree(mpoolPID, p);
 		}
 
-		eT = rT - yT; //Cálculo error corriente
 
-		iT = b * ( eT + eT0 ) + iT0; //Cálculo del término integral corriente
+		if(rT != 0){
+			//Si la referencia es distinta de 0
 
-		/*Limite termino integral corriente*/
-		if ( iT > pid_max )
-			iT = pid_max; //Salida integral si es mayor que el MAX
-		else if ( iT < pid_min )
-			iT = pid_min; //Salida integral si es menor que el MIN
+			eT = rT - yT; //Cálculo error corriente
 
-		dT = -c * ( yT - yT0 );	//Cálculo del término derivativo corriente
-		uT = iT + a * eT + dT; //Cálculo de la salida PID corriente
+			iT = b * ( eT + eT0 ) + iT0; //Cálculo del término integral corriente
 
-		/*Limite PID corriente*/
-		if ( uT > pid_max )
-			uT = pid_max;           //Salida PID si es mayor que el MAX
-		else if ( uT < pid_min )
-			uT = pid_min;      //Salida PID si es menor que el MIN
+			/*Limite termino integral corriente*/
+			if ( iT > pid_max )
+				iT = pid_max; //Salida integral si es mayor que el MAX
+			else if ( iT < pid_min )
+				iT = pid_min; //Salida integral si es menor que el MIN
 
-		/* Guardar variables */
-		iT0 = iT;
-		eT0 = eT;
-		yT0 = yT;
+			dT = -c * ( yT - yT0 );	//Cálculo del término derivativo corriente
+			uT = iT + a * eT + dT; //Cálculo de la salida PID corriente
 
-		DAC_set(uT);
+			/*Limite PID corriente*/
+			if ( uT > pid_max )
+				uT = pid_max;           //Salida PID si es mayor que el MAX
+			else if ( uT < pid_min )
+				uT = pid_min;      //Salida PID si es menor que el MIN
+
+			/* Guardar variables */
+			iT0 = iT;
+			eT0 = eT;
+			yT0 = yT;
+
+			DAC_set(uT);
+		}
 
 		osDelay(5);
 	}

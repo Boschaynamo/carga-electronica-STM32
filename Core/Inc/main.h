@@ -63,6 +63,16 @@ void Error_Handler(void);
 #define CONEXT_GPIO_Port GPIOC
 #define EMOS2_Pin GPIO_PIN_15
 #define EMOS2_GPIO_Port GPIOC
+#define ETH_RST_Pin GPIO_PIN_3
+#define ETH_RST_GPIO_Port GPIOA
+#define ETH_CS_Pin GPIO_PIN_4
+#define ETH_CS_GPIO_Port GPIOA
+#define ETH_SCK_Pin GPIO_PIN_5
+#define ETH_SCK_GPIO_Port GPIOA
+#define ETH_MISO_Pin GPIO_PIN_6
+#define ETH_MISO_GPIO_Port GPIOA
+#define ETH_MOSI_Pin GPIO_PIN_7
+#define ETH_MOSI_GPIO_Port GPIOA
 #define VTO_Pin GPIO_PIN_0
 #define VTO_GPIO_Port GPIOB
 #define EMOS1_Pin GPIO_PIN_1
