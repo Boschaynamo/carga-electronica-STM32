@@ -168,6 +168,7 @@
             background-image: url('https://cdn.discordapp.com/attachments/1065034859845791848/1208186413238059119/main.png?ex=65e25e47&is=65cfe947&hm=d3da2b154bf620a6e5ab9b2068df7bd01a0d768e7552a249c5d5b017e0f4d5cf&');\
             background-size: cover;\
         }\
+\
         canvas {\
             display: block;\
             margin: 40px auto;\
@@ -181,9 +182,11 @@
             background-repeat: no-repeat;\
             width: 100%;\
             height: 60px;\
+\
         }\
     </style>\
 </head>\
+\
 <body>\
     <div id='NavBar'>Hola Como estas?</div>\
     <canvas id='my-canvas'\
@@ -193,11 +196,14 @@
     </script>\
     <script type='text/javascript' charset='utf-8'>\
         const xValues = [];\
-        const yValues = [];\
+        const corrienteValues = [];\
+        const voltajeValues = [];\
         for (let i = 0; i < 50; i++) {\
             xValues.push(0);\
-            yValues.push(0);\
+            corrienteValues.push(0);\
+            voltajeValues.push(0)\
         }\
+\
         var whiteColorGraph = '#FFFFFF'\
         var gridColor = '#042e59'\
         var chart = new Chart('my-canvas', {\
@@ -206,7 +212,7 @@
                 labels: xValues,\
                 datasets: [{\
                     label: 'Voltaje',\
-                    data: yValues,\
+                    data: voltajeValues,\
                     fill: false,\
                     tension: 0.1,\
                     pointRadius: 4,\
@@ -218,7 +224,7 @@
                     tension: 0.4\
                 }, {\
                     label: 'Corriente',\
-                    data: yValues,\
+                    data: corrienteValues,\
                     fill: false,\
                     tension: 0.1,\
                     pointRadius: 4,\
@@ -238,6 +244,7 @@
                             stepSize: 10,\
                             suggestedMin: 0,\
                             suggestedMax: 50\
+\
                         },\
                         gridLines: {\
                             color: gridColor, // Setting grid color for y-axis here\
@@ -259,24 +266,34 @@
                     fontColor: whiteColorGraph\
                 }\
             },\
+\
         });\
+\
+\
         //Add point function\
         function addPoint() {\
-            fetch('/data.cgi').then(response => response.json()).then(({ x, y }) => {\
+            fetch('/data.cgi').then(response => response.json()).then(({ corriente, tension, potencia, setpoint }) => {\
                 const date = new Date();\
+\
                 if (xValues.length >= 50)\
                     xValues.shift();\
-                if (yValues.length >= 50)\
-                    yValues.shift()\
+                if (corrienteValues.length >= 50) {\
+                    corrienteValues.shift()\
+                    voltajeValues.shift();\
+                }\
                 xValues.push(`${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}`);\
-                yValues.push(y);\
+                corrienteValues.push(corriente);\
+                voltajeValues.push(tension)\
+\
+\
                 chart.update();\
-                console.log('ready');\
+                console.log(corriente, tension, potencia);\
             }).catch(() => console.log('Error from api'))\
+\
         }\
         //Cada 1 seg agregar un punto proveniente de la api\
         let identificadorIntervaloDeTiempo = setInterval(() => addPoint(), 1000);\
     </script>\
 </body>\
-</html>"
+</html>\
 #endif
