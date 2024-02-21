@@ -56,9 +56,6 @@ uint8_t ethBuf0[2048];
 uint8_t RX_BUF[DATA_BUF_SIZE];
 uint8_t TX_BUF[DATA_BUF_SIZE];
 uint8_t socknumlist[] = {0, 1, 2, 3};
-uint8_t jsonStringToSend[20];
-uint8_t DATOX_CAMBIAR = 30;
-uint8_t DATOY_CAMBIAR = 25;
 
 /* USER CODE END PV */
 
@@ -91,8 +88,6 @@ void eth_start(void)
 	/* HTTP Server Initialization  */
 	httpServer_init(TX_BUF, RX_BUF, MAX_HTTPSOCK, socknumlist);		// Tx/Rx buffers (1kB) / The number of W5500 chip H/W sockets in use
 
-
-	sprintf(jsonStringToSend,"{\"x\":%d,\"y\":%d}",DATOX_CAMBIAR,DATOY_CAMBIAR);
 	/* Web content registration (web content in webpage.h, Example web pages) */
 	wep_define_func();
 

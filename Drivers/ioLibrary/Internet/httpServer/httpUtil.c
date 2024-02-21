@@ -14,10 +14,6 @@
 #include <stdlib.h>
 #include "httpUtil.h"
 
-extern jsonStringToSend;
-extern DATOX_CAMBIAR;
-extern DATOY_CAMBIAR;
-
 uint8_t http_get_cgi_handler(uint8_t *uri_name, uint8_t *buf, uint32_t *file_len)
 {
 	uint8_t ret = HTTP_OK;
@@ -35,7 +31,7 @@ uint8_t http_get_cgi_handler(uint8_t *uri_name, uint8_t *buf, uint32_t *file_len
 	else if (strcmp((const char *)uri_name, "data.cgi") == 0)
 	{
 		// To do
-		len = sprintf(buf, "{\"x\":%d,\"y\":%d}", DATOX_CAMBIAR, DATOY_CAMBIAR);
+		len = sprintf(buf, "{\"tension\":%d,\"corriente\":%d,\"potencia\":%d,\"setpoint\":%d}", tension, corriente, potencia, setpoint);
 	}
 	else
 	{
