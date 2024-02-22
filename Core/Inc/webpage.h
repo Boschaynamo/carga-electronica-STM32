@@ -344,7 +344,7 @@
 "                };"\
 "                xValues.push(`${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}`);"\
 "                corrienteValues.push(corriente);"\
-"                voltajeValues.push(tension / 1000);"\
+"                voltajeValues.push(tension);"\
 "                potenciaValues.push(potencia);"\
 ""\
 ""\
