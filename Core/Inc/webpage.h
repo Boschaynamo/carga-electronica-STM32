@@ -298,7 +298,7 @@
 "                    fontColor: whiteColorGraph"\
 "                }"\
 "            },"\
-"        }"\
+"        };"\
 "        const chartCorrienteProperty = JSON.parse(JSON.stringify(chartProperty));"\
 "        const chartPotenciaProperty = JSON.parse(JSON.stringify(chartProperty));"\
 "        chartCorrienteProperty.data.datasets = [{"\
@@ -313,7 +313,7 @@
 "            cubicInterpolationMode: 'monotone',"\
 "            tension: 0.4"\
 "        }];"\
-"        chartCorrienteProperty.options.scales.yAxes[0].scaleLabel.labelString = 'Corriente (A)'"\
+"        chartCorrienteProperty.options.scales.yAxes[0].scaleLabel.labelString = 'Corriente (A)';"\
 ""\
 "        chartPotenciaProperty.data.datasets = [{"\
 "            label: 'Potencia',"\
@@ -327,7 +327,7 @@
 "            cubicInterpolationMode: 'monotone',"\
 "            tension: 0.4"\
 "        }];"\
-"        chartPotenciaProperty.options.scales.yAxes[0].scaleLabel.labelString = 'Potencia (W)'"\
+"        chartPotenciaProperty.options.scales.yAxes[0].scaleLabel.labelString = 'Potencia (W)';"\
 "        var chartVoltaje = new Chart('voltaje-canvas', chartProperty);"\
 "        var chartCorriente = new Chart('corriente-canvas', chartCorrienteProperty);"\
 "        var chartPotencia = new Chart('potencia-canvas', chartPotenciaProperty);"\
@@ -341,7 +341,7 @@
 "                    corrienteValues.shift();"\
 "                    voltajeValues.shift();"\
 "                    potenciaValues.shift();"\
-"                }"\
+"                };"\
 "                xValues.push(`${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}`);"\
 "                corrienteValues.push(corriente);"\
 "                voltajeValues.push(tension / 1000);"\
@@ -353,7 +353,7 @@
 "                chartPotencia.update();"\
 "                console.log(corriente, tension, potencia);"\
 "            }).catch(() => console.log('Error from api'))"\
-"        }"\
+"        };"\
 "        let identificadorIntervaloDeTiempo = setInterval(() => addPoint(), 1000);"\
 "    </script>"\
 "</body>"\
