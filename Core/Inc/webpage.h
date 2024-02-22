@@ -236,8 +236,8 @@
 "        for (let i = 0; i < 50; i++) {"\
 "            xValues.push(0);"\
 "            corrienteValues.push(0);"\
-"            voltajeValues.push(0)"\
-"            potenciaValues.push(0)"\
+"            voltajeValues.push(0);"\
+"            potenciaValues.push(0);"\
 "        }"\
 "        const whiteColorGraph = '#FFFFFF'"\
 "        const gridColor = '#042e59'"\
@@ -339,14 +339,14 @@
 "                if (xValues.length >= 50)"\
 "                    xValues.shift();"\
 "                if (corrienteValues.length >= 50) {"\
-"                    corrienteValues.shift()"\
+"                    corrienteValues.shift();"\
 "                    voltajeValues.shift();"\
 "                    potenciaValues.shift();"\
 "                }"\
 "                xValues.push(`${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}`);"\
 "                corrienteValues.push(corriente);"\
-"                voltajeValues.push(tension / 1000)"\
-"                potenciaValues.push(potencia)"\
+"                voltajeValues.push(tension / 1000);"\
+"                potenciaValues.push(potencia);"\
 ""\
 ""\
 "                chartVoltaje.update();"\
@@ -354,7 +354,6 @@
 "                chartPotencia.update();"\
 "                console.log(corriente, tension, potencia);"\
 "            }).catch(() => console.log('Error from api'))"\
-""\
 "        }"\
 "        let identificadorIntervaloDeTiempo = setInterval(() => addPoint(), 1000);"\
 "    </script>"\
