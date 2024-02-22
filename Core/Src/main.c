@@ -110,6 +110,8 @@ osThreadId medicionHandle;
 osThreadId comunicacionHandle;
 osThreadId pid_taskHandle;
 /* USER CODE BEGIN PV */
+/* Definicion de tarea Ethernet  */
+osThreadId ethTask;
 
 /* Memory pool para comunicacion spi */
 osPoolDef(mpool, 5, char[21]); // Define memory pool
@@ -136,6 +138,8 @@ osMessageQId colaPID;
 RTC_TimeTypeDef sTime;
 RTC_DateTypeDef sDate;
 
+//Variable global para ethernet, no me gusta nada pero no queda otra xq no tengo ganas
+CARGA_HandleTypeDef *p_eth = NULL;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -159,11 +163,31 @@ void DAC_set(float setPoint);
 /* Prototipos funciones ethernet */
 extern void httpServer_run(uint8_t seqnum);
 extern void eth_start(void);
+
+/* Prototipos tareas */
+void eth_task (void const * argument); //tarea ethernet
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+void eth_task (void const * argument){
 
+	if(p_eth == NULL){
+		osDelay(500);
+	}
+
+	while(1){
+
+		/* Inicializo ethernet */
+		eth_start();
+
+		while(1){
+			//HTTP inicio
+			for(uint8_t j = 0; j < 4; j++)	httpServer_run(j); 	// HTTP Server handler
+			osDelay(250);
+		}
+	}
+}
 /* USER CODE END 0 */
 
 /**
@@ -200,18 +224,7 @@ int main(void)
   MX_RTC_Init();
   MX_SPI1_Init();
   /* USER CODE BEGIN 2 */
-  while(1){
 
-	  /* Inicializo ethernet */
-	  eth_start();
-
-
-	  while(1){
-		  //HTTP ETH PRUEBA
-		  for(uint8_t j = 0; j < 4; j++)	httpServer_run(j); 	// HTTP Server handler
-		  //Una vez que corro el handler, checkeo que ya me haya pedido la pagina de graficos, si es asi comienzo a enviar datos.
-	  }
-  }
   /* USER CODE END 2 */
 
   /* USER CODE BEGIN RTOS_MUTEX */
@@ -703,7 +716,7 @@ void StartDefaultTask(void const * argument)
 {
   /* USER CODE BEGIN 5 */
 	// Variables
-	CARGA_HandleTypeDef CARGAPresente;
+	static CARGA_HandleTypeDef CARGAPresente;
 	CARGA_HandleTypeDef *CARGAUpdate;
 	osEvent evt;
 
@@ -733,6 +746,11 @@ void StartDefaultTask(void const * argument)
 	CARGAPresente.valorPotencia = 0;
 	CARGAPresente.flagFecha = 0;
 	CARGAPresente.flagTrigger = 0;
+
+	/* definition and creation of defaultTask */
+	osThreadDef(ethTask, eth_task, osPriorityAboveNormal, 0, 512);
+	ethTask = osThreadCreate(osThread(ethTask), NULL);//ME GUSTARIA QUE FUERA UN PUNTERO
+	p_eth = &CARGAPresente;
 
 	/* Inicializo DAC */
 	DAC_init();

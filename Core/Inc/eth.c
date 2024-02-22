@@ -77,17 +77,16 @@ void wep_define_func(void);
  */
 void eth_start(void)
 {
-
 	/* USER CODE BEGIN 2 */
 	WIZCHIPInitialize();
-	HAL_Delay(3000);
+	osDelay(3000);
 	wizchip_setnetinfo(&defaultNetInfo);
 	print_network_information();
 	wizchip_getnetinfo(&defaultNetInfo);
 
 	/* HTTP Server Initialization  */
 	httpServer_init(TX_BUF, RX_BUF, MAX_HTTPSOCK, socknumlist);		// Tx/Rx buffers (1kB) / The number of W5500 chip H/W sockets in use
-
+	osDelay(500);
 	/* Web content registration (web content in webpage.h, Example web pages) */
 	wep_define_func();
 

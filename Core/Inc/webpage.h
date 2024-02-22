@@ -191,9 +191,8 @@
     <div id='NavBar'>Hola Como estas?</div>\
     <canvas id='my-canvas'\
         style='width:100%;max-width:1000px;background:#021d38;border:1px solid white; border-radius: 10px;'></canvas>\
-    <!-- <script src='https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.9.4/Chart.js'> -->\
-    <script src='http://localhost:3001/chart.js'></script>\
-    </script>\
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.9.4/Chart.js'></script>\
+    <!--<script src='http://localhost:3001/chart.js'></script> -->\
     <script type='text/javascript' charset='utf-8'>\
         const xValues = [];\
         const corrienteValues = [];\
@@ -295,5 +294,5 @@
         let identificadorIntervaloDeTiempo = setInterval(() => addPoint(), 1000);\
     </script>\
 </body>\
-</html>\
+</html>"
 #endif

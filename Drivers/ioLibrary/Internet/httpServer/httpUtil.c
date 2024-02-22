@@ -14,10 +14,44 @@
 #include <stdlib.h>
 #include "httpUtil.h"
 
+extern enum modos_carga{
+	m_apagado = 0,
+	m_corriente_off,
+	m_tension_off,
+	m_potenica_off,
+	m_fusible_off,
+	m_bateria_off,
+	m_corriente,
+	m_tension,
+	m_potencia,
+	m_fusible,
+	m_bateria
+};
+
+typedef struct
+{
+	enum modos_carga modo;         /* Modo de trabajo de la carga electronica */
+	uint32_t valorTension;   /* Valor de Tension de la carga electronica */
+	uint32_t valorCorriente; /* Valor de Corriente de la carga electronica */
+	uint32_t valorPotencia;  /* Set point Potencia de la carga electronica */
+	uint32_t setPoint;       /* Set point de la carga electronica */
+	char flagTrigger;
+	char flagFecha;
+
+} CARGA_HandleTypeDef;
+
+
+extern CARGA_HandleTypeDef * p_eth;
+
 uint8_t http_get_cgi_handler(uint8_t *uri_name, uint8_t *buf, uint32_t *file_len)
 {
 	uint8_t ret = HTTP_OK;
 	uint16_t len = 0;
+	static uint32_t tension = 0, corriente = 0, potencia = 0, setpoint = 0;
+	tension = p_eth->valorTension;
+	corriente = p_eth->valorCorriente;
+	potencia = p_eth->valorPotencia;
+	setpoint = p_eth->setPoint;
 
 	if (predefined_get_cgi_processor(uri_name, buf, &len))
 	{
@@ -31,7 +65,7 @@ uint8_t http_get_cgi_handler(uint8_t *uri_name, uint8_t *buf, uint32_t *file_len
 	else if (strcmp((const char *)uri_name, "data.cgi") == 0)
 	{
 		// To do
-		len = sprintf(buf, "{\"tension\":%d,\"corriente\":%d,\"potencia\":%d,\"setpoint\":%d}", tension, corriente, potencia, setpoint);
+		len = sprintf(buf, "{\"tension\":%lu,\"corriente\":%lu,\"potencia\":%lu,\"setpoint\":%lu}", tension, corriente, potencia, setpoint);
 	}
 	else
 	{
