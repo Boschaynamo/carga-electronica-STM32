@@ -157,4 +157,206 @@
 				 "</body>"                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 \
 				 "</html>"
 
-#define grafico_page "<!DOCTYPE html><html><head><meta http-equiv='Content-Type' content='text/html; charset=UTF-8'/><style type='text/css'>body{margin:0;background-image:url('https://cdn.discordapp.com/attachments/1065034859845791848/1208186413238059119/main.png?ex=65e25e47&is=65cfe947&hm=d3da2b154bf620a6e5ab9b2068df7bd01a0d768e7552a249c5d5b017e0f4d5cf&');background-size:cover;}canvas{display:block;margin:40px auto;}#NavBar{display:block;background:url('https://cdn.discordapp.com/attachments/1065034859845791848/1208182477475155999/image.png?ex=65e25a9d&is=65cfe59d&hm=4e8665e50ca38e426c7613facf101243d2d2d22f544bd6823b7830fa30d393f7&');background-size:auto;background-position:center;background-repeat:no-repeat;width:100%;height:60px;}</style></head><body><div id='NavBar'>Hola Como estas?</div><canvas id='my-canvas'style='width:100%;max-width:1000px;background:#021d38;border:1px solid white;border-radius:10px;'></canvas><script src='https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.9.4/Chart.js'></script><script type='text/javascript' charset='utf-8'>const xValues=[];const corrienteValues=[];const voltajeValues=[];for(let i=0;i<50;i++){xValues.push(0);corrienteValues.push(0);voltajeValues.push(0)}var whiteColorGraph='#FFFFFF';var gridColor='#042e59';var chart=new Chart('my-canvas',{type:'line',data:{labels:xValues,datasets:[{label:'Voltaje',data:voltajeValues,fill:false,tension:0.1,pointRadius:4,borderColor:'#0094c0',backgroundColor:'#00D2FF',pointBackgroundColor:'#00D2FF',fontColor:'white',cubicInterpolationMode:'monotone'},{label:'Corriente',data:corrienteValues,fill:false,tension:0.1,pointRadius:4,borderColor:'#009677',backgroundColor:'#38D2B0',pointBackgroundColor:'#38D2B0',cubicInterpolationMode:'monotone'}]},options:{scales:{yAxes:[{ticks:{beginAtZero:true,fontColor:whiteColorGraph,stepSize:10,suggestedMin:0,suggestedMax:50},gridLines:{color:gridColor}},{ticks:{beginAtZero:true,fontColor:whiteColorGraph},gridLines:{color:gridColor}}],title:{display:true,text:'Carga electrónica UTN FRA',fontColor:whiteColorGraph}}}});function addPoint(){fetch('/data.cgi').then(response=>response.json()).then(({corriente,tension,potencia,setpoint})=>{const date=new Date();if(xValues.length>=50)xValues.shift();if(corrienteValues.length>=50){corrienteValues.shift();voltajeValues.shift()}xValues.push(`${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}`);corrienteValues.push(corriente);voltajeValues.push(tension);chart.update();console.log(corriente,tension,potencia)}).catch(()=>console.log('Error from api'))}let identificadorIntervaloDeTiempo=setInterval(()=>addPoint(),1000);</script></body></html>"
+#define grafico_page "<!DOCTYPE html>"\
+"<html>"\
+"<head>"\
+"    <meta http-equiv='Content-Type' content='text/html; charset=UTF-8' />"\
+"    <style type='text/css'>"\
+"        body {"\
+"            margin: 0;"\
+"            background: linear-gradient(90deg, rgba(62, 84, 111, 1) 0%, rgba(84, 116, 148, 1) 33%, rgba(84, 107, 141, 1) 100%);"\
+"        }"\
+"        canvas {"\
+"            display: block;"\
+"            margin: 40px auto;"\
+"            width: 100%;"\
+"            max-width: 1200px;"\
+"            background: #021d38;"\
+"            border: 1px solid white;"\
+"            border-radius: 10px;"\
+"        }"\
+"        #NavBar {"\
+"            display: flex;"\
+"            justify-content: space-between;"\
+"            width: 100%;"\
+"            height: 60px;"\
+"        }"\
+"        #canvasContainer {"\
+"            display: flex;"\
+"            flex-direction: column;"\
+"        }"\
+"        #sideBar {"\
+"            background-image: url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAZsAAAA9CAYAAAB7qsS/AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsEAAA7BAbiRa+0AAABhaVRYdFNuaXBNZXRhZGF0YQAAAAAAeyJjbGlwUG9pbnRzIjpbeyJ4IjowLCJ5IjowfSx7IngiOjEwMDUsInkiOjB9LHsieCI6MTAwNSwieSI6NjF9LHsieCI6MCwieSI6NjF9XX2hVc/dAAAB1ElEQVR4Xu3dv03DQBiH4TsmYDaGQLRpoaKjQgwAFXPQMQcT0FEhgYId+/LHSZCbXxDS86Q45z7bgGTprZBrub1fFgAIOhtXAIgRGwDixAaAOLEBIE5sAIgTGwDixAaAOLEBIE5sAIgTGwDixAaAOLEBIE5sAIgTGwDixAaAOLEBIE5sAIgTGwDixAaAOLEBIE5sAIgTGwDixAaAOLEBIE5sAIgTGwDixAaAOLEBIE5sAIgTGwDixAaAOLEBIE5sAIgTGwDixAaAOLEBIE5sAIir5fpuOR4DQES9eXkVGwCi6ufXt9gAEFWXnfEYACLq2/uH2AAQVc8Xz2IDQFQtl49iA0BULVdPYgNAlH/qBCBObACIExsA4sQGgDixASBObACIExsA4sQGgDixASBObACIExsA4sQGgDixASBObACIqxeLh2X/poFS+jcNbK8zHLps5/Jho3afY6ftnD61d2J30L/Ful/n3eFXe3fp7tu/JfvQ2ky/b36fwXq+vvE4H9fNfHf/pPP2F7f9re/DvBn317p595k/39d+2jHmfzzvTugfi7XJBbPnbX+ynmTeHa60/WY1b89/024wGJ7fOfO2v7v+j3nT9pvpfF+72zHH56X8AG19zaONSpJEAAAAAElFTkSuQmCC\");"\
+"            background-size: auto;"\
+"            background-position: center;"\
+"            background-repeat: repeat;"\
+"            height: 100%;"\
+"            width: 33.4%;"\
+"        }"\
+"    </style>"\
+"</head>"\
+"<body>"\
+"    <div id='NavBar'>"\
+"        <div id='sideBar'></div>"\
+"        <div style='background:url(\"data:image/png;base64,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\");"\
+"        background-size: auto;background-position: center;"\
+"        background-repeat: no-repeat; height: 100%; width:33.3%'></div>"\
+"        <div id='sideBar'></div>"\
+"    </div>"\
+"    <div>"\
+"        <h1 style='text-align: center; color:whitesmoke'>PROYECTO FINAL INGENIERIA ELECTRÓNICA</h1>"\
+"        <h2 style='text-align: center;color:whitesmoke'>CARGA ELECTRÓNICA DC</h2>"\
+"        <div style='display:flex;margin:10px;gap:30px; align-items: center;justify-content: center;color:whitesmoke'>"\
+"            <span>"\
+"                <p>Buszczak, Nicolás </p>"\
+"                <p>nico_947quil@hotmail.com</p>"\
+"            </span>"\
+"            <span>"\
+"                <p>Cogliatti, Martín Gabriel </p>"\
+"                <p>cogliatti.martin@gmail.com</p>"\
+"            </span>"\
+"            <span>"\
+"                <p>Porco Mazzolini, Nicolás Ezequiel </p>"\
+"                <p>nicolasseze@gmail.com</p>"\
+"            </span>"\
+"        </div>"\
+"    </div>"\
+"    <div id='canvasContainer'>"\
+"        <canvas id='voltaje-canvas'></canvas>"\
+"        <canvas id='corriente-canvas'></canvas>"\
+"        <canvas id='potencia-canvas'></canvas>"\
+"    </div>"\
+"    <script src='https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.9.4/Chart.js'></script>"\
+"    <!-- <script src='http://localhost:3001/chart.js'></script> -->"\
+"    <script type='text/javascript' charset='utf-8'>"\
+"        const xValues = [];"\
+"        const corrienteValues = [];"\
+"        const voltajeValues = [];"\
+"        const potenciaValues = [];"\
+"        for (let i = 0; i < 50; i++) {"\
+"            xValues.push(0);"\
+"            corrienteValues.push(0);"\
+"            voltajeValues.push(0)"\
+"            potenciaValues.push(0)"\
+"        }"\
+"        const whiteColorGraph = '#FFFFFF'"\
+"        const gridColor = '#042e59'"\
+"        const chartProperty = {"\
+"            type: 'line',"\
+"            data: {"\
+"                labels: xValues,"\
+"                datasets: [{"\
+"                    label: 'Voltaje',"\
+"                    data: voltajeValues,"\
+"                    fill: false,"\
+"                    tension: 0.1,"\
+"                    pointRadius: 4,"\
+"                    borderColor: '#0094c0',"\
+"                    backgroundColor: '#00D2FF',"\
+"                    pointBackgroundColor: '#00D2FF',"\
+"                    fontColor: 'white',"\
+"                    cubicInterpolationMode: 'monotone',"\
+"                    tension: 0.4"\
+"                }]"\
+"            },"\
+"            options: {"\
+"                scales: {"\
+"                    yAxes: [{"\
+"                        scaleLabel: {"\
+"                            display: true,"\
+"                            labelString: 'Tension (V)',"\
+"                            fontColor: whiteColorGraph"\
+"                        },"\
+"                        ticks: {"\
+"                            beginAtZero: true,"\
+"                            fontColor: whiteColorGraph,"\
+"                            stepSize: 10,"\
+"                            suggestedMin: 0,"\
+"                            suggestedMax: 50"\
+"                        },"\
+"                        gridLines: {"\
+"                            color: gridColor,"\
+"                        },"\
+"                    }],"\
+"                    xAxes: [{"\
+"                        scaleLabel: {"\
+"                            display: true,"\
+"                            labelString: 'Tiempo', "\
+"                            fontColor: whiteColorGraph"\
+"                        },"\
+"                        ticks: {"\
+"                            beginAtZero: true,"\
+"                            fontColor: whiteColorGraph,"\
+"                        },"\
+"                        gridLines: {"\
+"                            color: gridColor, "\
+"                        }"\
+"                    }]"\
+"                },"\
+"                title: {"\
+"                    display: true,"\
+"                    text: 'Carga electrónica UTN FRA',"\
+"                    fontColor: whiteColorGraph"\
+"                }"\
+"            },"\
+"        }"\
+"        const chartCorrienteProperty = JSON.parse(JSON.stringify(chartProperty));"\
+"        const chartPotenciaProperty = JSON.parse(JSON.stringify(chartProperty));"\
+"        chartCorrienteProperty.data.datasets = [{"\
+"            label: 'Corriente',"\
+"            data: corrienteValues,"\
+"            fill: false,"\
+"            tension: 0.1,"\
+"            pointRadius: 4,"\
+"            borderColor: '#38D2B0',"\
+"            backgroundColor: '#009677',"\
+"            pointBackgroundColor: '#009677',"\
+"            cubicInterpolationMode: 'monotone',"\
+"            tension: 0.4"\
+"        }];"\
+"        chartCorrienteProperty.options.scales.yAxes[0].scaleLabel.labelString = 'Corriente (A)'"\
+""\
+"        chartPotenciaProperty.data.datasets = [{"\
+"            label: 'Potencia',"\
+"            data: potenciaValues,"\
+"            fill: false,"\
+"            tension: 0.1,"\
+"            pointRadius: 4,"\
+"            borderColor: '#97EA8E',"\
+"            backgroundColor: '##7fcc76',"\
+"            pointBackgroundColor: '##7fcc76',"\
+"            cubicInterpolationMode: 'monotone',"\
+"            tension: 0.4"\
+"        }];"\
+"        chartPotenciaProperty.options.scales.yAxes[0].scaleLabel.labelString = 'Potencia (W)'"\
+"        var chartVoltaje = new Chart('voltaje-canvas', chartProperty);"\
+"        var chartCorriente = new Chart('corriente-canvas', chartCorrienteProperty);"\
+"        var chartPotencia = new Chart('potencia-canvas', chartPotenciaProperty);"\
+"        function addPoint() {"\
+"            fetch('/data.cgi').then(response => response.json()).then(({ corriente, tension, potencia, setpoint }) => {"\
+"                const date = new Date();"\
+""\
+"                if (xValues.length >= 50)"\
+"                    xValues.shift();"\
+"                if (corrienteValues.length >= 50) {"\
+"                    corrienteValues.shift()"\
+"                    voltajeValues.shift();"\
+"                    potenciaValues.shift();"\
+"                }"\
+"                xValues.push(`${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}`);"\
+"                corrienteValues.push(corriente);"\
+"                voltajeValues.push(tension / 1000)"\
+"                potenciaValues.push(potencia)"\
+""\
+""\
+"                chartVoltaje.update();"\
+"                chartCorriente.update();"\
+"                chartPotencia.update();"\
+"                console.log(corriente, tension, potencia);"\
+"            }).catch(() => console.log('Error from api'))"\
+""\
+"        }"\
+"        let identificadorIntervaloDeTiempo = setInterval(() => addPoint(), 1000);"\
+"    </script>"\
+"</body>"\
+"</html>"
