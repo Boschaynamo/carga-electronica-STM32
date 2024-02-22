@@ -238,8 +238,8 @@
 "            voltajeValues.push(0);"\
 "            potenciaValues.push(0);"\
 "        }"\
-"        const whiteColorGraph = '#FFFFFF'"\
-"        const gridColor = '#042e59'"\
+"        const whiteColorGraph = '#FFFFFF';"\
+"        const gridColor = '#042e59';"\
 "        const chartProperty = {"\
 "            type: 'line',"\
 "            data: {"\
