@@ -127,12 +127,18 @@ osPoolId mpoolCARGA_Handle;
 osMessageQDef(colaCARGA, 1, uint32_t); // Define message queue
 osMessageQId colaCARGA;
 
-osPoolDef(mpoolMediciones, 5, MEDICIONES_TypeDef); // Define memory pool
+osPoolDef(mpoolMediciones_pid, 5, MEDICIONES_TypeDef); // Define memory pool
+osPoolId mpoolMediciones_pid;
+osPoolDef(mpoolMediciones, 1, MEDICIONES_TypeDef); // Define memory pool
 osPoolId mpoolMediciones;
+osPoolDef(mpoolMediciones_eth, 1, MEDICIONES_TypeDef); // Define memory pool
+osPoolId mpoolMediciones_eth;
 osMessageQDef(colaMediciones, 1, uint32_t); // Define message queue
 osMessageQId colaMediciones;
 osMessageQDef(colaMediciones_pid, 1, uint32_t); // Define message queue
 osMessageQId colaMediciones_pid;
+osMessageQDef(colaMediciones_eth, 1, uint32_t); // Define message queue
+osMessageQId colaMediciones_eth;
 
 osPoolDef(mpoolPID, 1, PID_TypeDef); // Define memory pool
 osPoolId mpoolPID;
@@ -247,8 +253,12 @@ int main(void)
   colaCARGA = osMessageCreate(osMessageQ(colaCARGA), NULL); // create colaCARGA queue
 
   mpoolMediciones = osPoolCreate(osPool(mpoolMediciones));// create memory pool
+  mpoolMediciones_pid = osPoolCreate(osPool(mpoolMediciones_pid));// create memory pool
+  mpoolMediciones_eth = osPoolCreate(osPool(mpoolMediciones_eth));// create memory pool
+
   colaMediciones = osMessageCreate(osMessageQ(colaMediciones), NULL); // create colaMediciones queue
   colaMediciones_pid = osMessageCreate(osMessageQ(colaMediciones_pid), NULL); // create colaMediciones_pid queue
+  colaMediciones_eth = osMessageCreate(osMessageQ(colaMediciones_eth), NULL); // create colaMediciones_pid queue
 
   mpoolPID = osPoolCreate(osPool(mpoolPID));// create memory pool
   colaPID = osMessageCreate(osMessageQ(colaPID), NULL);// create colaPID queue
@@ -268,8 +278,8 @@ int main(void)
   comunicacionHandle = osThreadCreate(osThread(comunicacion), NULL);
 
   /* definition and creation of pid_task */
-  osThreadDef(pid_task, pid_control, osPriorityAboveNormal, 0, 128);
-  pid_taskHandle = osThreadCreate(osThread(pid_task), NULL);
+//  osThreadDef(pid_task, pid_control, osPriorityAboveNormal, 0, 128);
+//  pid_taskHandle = osThreadCreate(osThread(pid_task), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
 //  /* add threads, ... */
@@ -579,6 +589,9 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(prueba_GPIO_Port, prueba_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(ETH_RST_GPIO_Port, ETH_RST_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
@@ -587,11 +600,18 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_RESET);
 
-  /*Configure GPIO pins : TRIGGER_Pin CONEXT_Pin EMOS2_Pin */
-  GPIO_InitStruct.Pin = TRIGGER_Pin|CONEXT_Pin|EMOS2_Pin;
+  /*Configure GPIO pins : TRIGGER_Pin CONEXT_Pin */
+  GPIO_InitStruct.Pin = TRIGGER_Pin|CONEXT_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : prueba_Pin */
+  GPIO_InitStruct.Pin = prueba_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(prueba_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : ETH_RST_Pin */
   GPIO_InitStruct.Pin = ETH_RST_Pin;
@@ -749,7 +769,7 @@ void StartDefaultTask(void const * argument)
 	CARGAPresente.flagTrigger = 0;
 
 	/* definition and creation of defaultTask */
-	osThreadDef(ethTask, eth_task, osPriorityAboveNormal, 0, 4096);
+	osThreadDef(ethTask, eth_task, osPriorityNormal, 0, 2048);
 	ethTask = osThreadCreate(osThread(ethTask), NULL);//ME GUSTARIA QUE FUERA UN PUNTERO
 
 	/* Inicializo DAC */
@@ -876,8 +896,6 @@ void StartDefaultTask(void const * argument)
 			p_pid->referencia = referencia;
 			osMessagePut(colaPID, (uint32_t)p_pid, 10);
 		}
-		if(CARGAPresente.flagTrigger == 0)
-			osSignalSet(pid_taskHandle,signal_cargaON);
 
 		//Tarea periodica 100mS
 		osDelayUntil(&previosWakeTime, 100);
@@ -901,6 +919,8 @@ void medicion_variables(void const * argument)
   float tension = 0, tension_ant = 0;
   float current = 0, current_ant = 0;
 
+  osEvent evt;
+
   // Estructura mediciones
   MEDICIONES_TypeDef* cargaMediciones, *cargaMediciones_lenta;
 
@@ -919,81 +939,95 @@ void medicion_variables(void const * argument)
   /* Infinite loop */
   for (;;)
   {
-	  cargaMediciones = osPoolAlloc(mpoolMediciones);
 
-	  if ( cargaMediciones != NULL ){
+	  /* Medicion de Corriente con filtro EMA */
+	  current = current_ant * (1 - 0.4) + 0.4 * ADC_read_current(&hi2c1);
+	  current_ant = current;
 
-		  /* Medicion de Corriente con filtro EMA */
-		  current = current_ant * (1 - 0.4) + 0.4 * ADC_read_current(&hi2c1);
-		  current_ant = current;
+	  /* Medicion de Tension con filtro EMA*/
+	  tension = tension_ant * (1 - 0.6) + 0.6 * ADC_read_tension(&hi2c1, rango);
+	  tension_ant = tension;
 
-		  /* Medicion de Tension con filtro EMA*/
-		  tension = tension_ant * (1 - 0.6) + 0.6 * ADC_read_tension(&hi2c1, rango);
-		  tension_ant = tension;
+	  // Si la tension < 0 normalizo
+	  if (tension < 0)
+		  tension = 0;
 
-		  // Si la tension < 0 normalizo
-		  if (tension < 0)
-			  tension = 0;
+	  // Verificar en que rango estamos de tension
+	  if(rango == true){
+		  // Rango 16V
 
-		  // Verificar en que rango estamos de tension
-		  if(rango == true){
-			  // Rango 16V
+		  if( tension > 16000){
+			  // Tension mayor al rango min
+			  c_rango++;
 
-			  if( tension > 16000){
-				  // Tension mayor al rango min
-				  c_rango++;
-
-				  if(c_rango > 2){
-					  //Lo supero 3 veces consecutiva(6ms) -> cambio rango a 160V
-					  rango = false;
-					  HAL_GPIO_WritePin(VSCALE_GPIO_Port, VSCALE_Pin, GPIO_PIN_RESET);
-					  c_rango = 0;
-				  }
-			  }
-			  else // Tension menor al rango max
+			  if(c_rango > 2){
+				  //Lo supero 3 veces consecutiva(6ms) -> cambio rango a 160V
+				  rango = false;
+				  HAL_GPIO_WritePin(VSCALE_GPIO_Port, VSCALE_Pin, GPIO_PIN_RESET);
 				  c_rango = 0;
-
-		  } else {
-			  // Rango 160V
-
-			  if(tension < 15500){
-				  // Tension menor al rango min
-				  c_rango++;
-
-				  if(c_rango > 20){
-					  // Estuvo por debajo 20 veces consecutivas (40ms)
-					  // -> Cambio rango a 16V.
-					  rango = true;
-					  HAL_GPIO_WritePin(VSCALE_GPIO_Port, VSCALE_Pin, GPIO_PIN_SET);
-					  c_rango = 0;
-				  }
 			  }
-			  else
-				  c_rango = 0;
 		  }
+		  else // Tension menor al rango max
+			  c_rango = 0;
 
-		  // Bloqueo la tarea 5ms * 10 veces = 50mS
-		  osDelayUntil(&previosWakeTime, 5);
-		  // Envio las mediciones tasa 20Hz.
-		  // Guardo los valores de las variables a enviar.
-		  cargaMediciones->corriente = current;
-		  cargaMediciones->tension = tension;
-		  osMessagePut(colaMediciones_pid, (uint32_t)cargaMediciones, osWaitForever);
-		  if( i++ == 20){
-			  cargaMediciones_lenta = osPoolAlloc(mpoolMediciones);
-			  if ( cargaMediciones_lenta != NULL ){
-				  // Guardo los valores de las variables a enviar.
-				  cargaMediciones_lenta->corriente = current;
-				  cargaMediciones_lenta->tension = tension;
+	  } else {
+		  // Rango 160V
+
+		  if(tension < 15500){
+			  // Tension menor al rango min
+			  c_rango++;
+
+			  if(c_rango > 20){
+				  // Estuvo por debajo 20 veces consecutivas (40ms)
+				  // -> Cambio rango a 16V.
+				  rango = true;
+				  HAL_GPIO_WritePin(VSCALE_GPIO_Port, VSCALE_Pin, GPIO_PIN_SET);
+				  c_rango = 0;
 			  }
+		  }
+		  else
+			  c_rango = 0;
+	  }
+
+	  // Envio las mediciones tasa 10Hz.
+	  if( i++ == 20){
+		  cargaMediciones_lenta = osPoolAlloc(mpoolMediciones);
+		  if ( cargaMediciones_lenta != NULL ){
+			  // Guardo los valores de las variables a enviar.
+			  cargaMediciones_lenta->corriente = current;
+			  cargaMediciones_lenta->tension = tension;
 			  osMessagePut(colaMediciones, (uint32_t)cargaMediciones_lenta, 0);
-			  i = 0;
 		  }
+		  cargaMediciones = NULL;
+		  i = 0;
 	  }
-	  else{
-		  // Si no hay lugar en la cola mediciones espero 100ms
-		  osDelay(10);
+	  // Envio las mediciones a tarea pid
+
+	  evt = osSignalWait(0x01, 1);
+	  if( evt.status == osEventSignal){
+		  cargaMediciones = osPoolAlloc(mpoolMediciones_pid);
+		  if ( cargaMediciones != NULL ){
+			  cargaMediciones->corriente = current;
+			  cargaMediciones->tension = tension;
+			  osMessagePut(colaMediciones_pid, (uint32_t)cargaMediciones, 5);
+		  }
+		  cargaMediciones = NULL;
 	  }
+
+//	  evt = osSignalWait(0x02, 1);
+//	  if( evt.status == osEventSignal){
+//		  cargaMediciones = osPoolAlloc(mpoolMediciones_eth);
+//		  if ( cargaMediciones != NULL ){
+//			  cargaMediciones->corriente = current;
+//			  cargaMediciones->tension = tension;
+//			  osMessagePut(colaMediciones_eth, (uint32_t)cargaMediciones, 0);
+//		  }
+//		  cargaMediciones = NULL;
+//	  }
+
+	  // Bloqueo la tarea 5ms * 10 veces = 50mS
+	  osDelayUntil(&previosWakeTime, 5);
+	  HAL_GPIO_TogglePin(prueba_GPIO_Port, prueba_Pin);
   }
 
   /* USER CODE END medicion_variables */
@@ -1105,6 +1139,8 @@ void pid_control(void const * argument)
 
 	osEvent evt;
 
+	uint32_t previosWakeTime = osKernelSysTick();
+
 	//Puntero a estructura pid
 	PID_TypeDef *p = NULL;
 	enum modos_carga modo = m_apagado;
@@ -1126,73 +1162,72 @@ void pid_control(void const * argument)
 	/* Infinite loop */
 	for(;;)
 	{
-		evt = osSignalWait(signal_cargaON, osWaitForever);
-		if(evt.status == osEventSignal){
-			//Recibi señal para comenzar
 
-			/* Mientras no llegue un 0 de referencia */
-			while(1){
+		//Recibo señal de referencia y modo
+		evt = osMessageGet(colaPID, 0);
+		if(evt.status == osEventMessage){
 
-				//Recibo señal de referencia y modo
-				evt = osMessageGet(colaPID, 0);
-				if(evt.status == osEventMessage){
-
-					p = evt.value.p;
-					modo = (enum modos_carga)p->modo;
-					//yT = (float)p->señal; //Señal de corriente
-					rT = (float)p->referencia; //Señal de referencia
-					osPoolFree(mpoolPID, p);
-					if(rT <= 0)
-						break;
-				}
-
-				//Recibo valor de corriente medida
-				evt = osMessageGet(colaMediciones_pid, osWaitForever);
-				if(evt.status == osEventMessage){
-
-					p_mediciones = evt.value.p;
-					//Leo el valor de corriente
-					yT = p_mediciones->corriente; //Señal de corriente
-					// Liberar memoria asignada para el mensaje
-					osPoolFree(mpoolMediciones, p_mediciones);
-				}
-
-
-				//Hago las tareas del pid
-				if(rT != 0){
-					//Si la referencia es distinta de 0
-
-					eT = rT - yT; //Cálculo error corriente
-
-					iT = b * ( eT + eT0 ) + iT0; //Cálculo del término integral corriente
-
-					/*Limite termino integral corriente*/
-					if ( iT > pid_max )
-						iT = pid_max; //Salida integral si es mayor que el MAX
-					else if ( iT < pid_min )
-						iT = pid_min; //Salida integral si es menor que el MIN
-
-					dT = -c * ( yT - yT0 );	//Cálculo del término derivativo corriente
-					uT = iT + a * eT + dT; //Cálculo de la salida PID corriente
-
-					/*Limite PID corriente*/
-					if ( uT > pid_max )
-						uT = pid_max;           //Salida PID si es mayor que el MAX
-					else if ( uT < pid_min )
-						uT = pid_min;      //Salida PID si es menor que el MIN
-
-					/* Guardar variables */
-					iT0 = iT;
-					eT0 = eT;
-					yT0 = yT;
-
-					DAC_set(uT);
-				}
-
-				//Bloqueo la tarea 5mS
-				osDelay(5);
-			}
+			p = evt.value.p;
+			modo = (enum modos_carga)p->modo;
+			//yT = (float)p->señal; //Señal de corriente
+			rT = (float)p->referencia; //Señal de referencia
+			osPoolFree(mpoolPID, p);
 		}
+
+		//Si la carga esta encendida
+		if(modo == m_corriente || modo == m_potencia){
+
+			//Le digo a mediciones que quiero el dato
+			osSignalSet(medicionHandle, 0x01);
+
+			//Recibo valor de corriente medida
+			evt = osMessageGet(colaMediciones_pid, osWaitForever);
+			if(evt.status == osEventMessage){
+
+				p_mediciones = evt.value.p;
+				//Leo el valor de corriente
+				yT = p_mediciones->corriente; //Señal de corriente
+				// Liberar memoria asignada para el mensaje
+				osPoolFree(mpoolMediciones_pid, p_mediciones);
+			}
+
+			//Hago las tareas del pid
+			if(rT != 0){
+				//Si la referencia es distinta de 0
+
+				eT = rT - yT; //Cálculo error corriente
+
+				iT = b * ( eT + eT0 ) + iT0; //Cálculo del término integral corriente
+
+				/*Limite termino integral corriente*/
+				if ( iT > pid_max )
+					iT = pid_max; //Salida integral si es mayor que el MAX
+				else if ( iT < pid_min )
+					iT = pid_min; //Salida integral si es menor que el MIN
+
+				dT = -c * ( yT - yT0 );	//Cálculo del término derivativo corriente
+				uT = iT + a * eT + dT; //Cálculo de la salida PID corriente
+
+				/*Limite PID corriente*/
+				if ( uT > pid_max )
+					uT = pid_max;           //Salida PID si es mayor que el MAX
+				else if ( uT < pid_min )
+					uT = pid_min;      //Salida PID si es menor que el MIN
+
+				/* Guardar variables */
+				iT0 = iT;
+				eT0 = eT;
+				yT0 = yT;
+
+				DAC_set(uT);
+			}
+
+			//Bloqueo la tarea 5mS
+			osDelayUntil(&previosWakeTime, 5);
+		}
+		else
+			osDelay(70);
+
 	}
   /* USER CODE END pid_control */
 }

@@ -61,8 +61,8 @@ void Error_Handler(void);
 #define TRIGGER_GPIO_Port GPIOC
 #define CONEXT_Pin GPIO_PIN_14
 #define CONEXT_GPIO_Port GPIOC
-#define EMOS2_Pin GPIO_PIN_15
-#define EMOS2_GPIO_Port GPIOC
+#define prueba_Pin GPIO_PIN_15
+#define prueba_GPIO_Port GPIOC
 #define ETH_RST_Pin GPIO_PIN_3
 #define ETH_RST_GPIO_Port GPIOA
 #define ETH_CS_Pin GPIO_PIN_4
