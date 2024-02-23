@@ -69,7 +69,7 @@ typedef struct{
 /* Estructura pid */
 typedef struct{
 	uint32_t referencia;
-	uint32_t señal;
+	enum modos_carga modo;
 
 } PID_TypeDef;
 
@@ -88,6 +88,9 @@ typedef struct{
 #define PID_MAX 3000
 #define PID_MIN 0
 #define PID_SETPOINT 0.0
+
+//Definiciones signals
+#define signal_cargaON		0x01
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -126,8 +129,10 @@ osMessageQId colaCARGA;
 
 osPoolDef(mpoolMediciones, 5, MEDICIONES_TypeDef); // Define memory pool
 osPoolId mpoolMediciones;
-osMessageQDef(colaMediciones, 5, uint32_t); // Define message queue
+osMessageQDef(colaMediciones, 1, uint32_t); // Define message queue
 osMessageQId colaMediciones;
+osMessageQDef(colaMediciones_pid, 1, uint32_t); // Define message queue
+osMessageQId colaMediciones_pid;
 
 osPoolDef(mpoolPID, 1, PID_TypeDef); // Define memory pool
 osPoolId mpoolPID;
@@ -138,8 +143,6 @@ osMessageQId colaPID;
 RTC_TimeTypeDef sTime;
 RTC_DateTypeDef sDate;
 
-//Variable global para ethernet, no me gusta nada pero no queda otra xq no tengo ganas
-CARGA_HandleTypeDef *p_eth = NULL;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -171,10 +174,6 @@ void eth_task (void const * argument); //tarea ethernet
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 void eth_task (void const * argument){
-
-	if(p_eth == NULL){
-		osDelay(500);
-	}
 
 	while(1){
 
@@ -248,7 +247,8 @@ int main(void)
   colaCARGA = osMessageCreate(osMessageQ(colaCARGA), NULL); // create colaCARGA queue
 
   mpoolMediciones = osPoolCreate(osPool(mpoolMediciones));// create memory pool
-  colaMediciones = osMessageCreate(osMessageQ(colaMediciones), NULL); // create colaCARGA queue
+  colaMediciones = osMessageCreate(osMessageQ(colaMediciones), NULL); // create colaMediciones queue
+  colaMediciones_pid = osMessageCreate(osMessageQ(colaMediciones_pid), NULL); // create colaMediciones_pid queue
 
   mpoolPID = osPoolCreate(osPool(mpoolPID));// create memory pool
   colaPID = osMessageCreate(osMessageQ(colaPID), NULL);// create colaPID queue
@@ -715,6 +715,9 @@ void DAC_set(float setPoint)
 void StartDefaultTask(void const * argument)
 {
   /* USER CODE BEGIN 5 */
+	//osDelayUntil
+	uint32_t previosWakeTime = osKernelSysTick();
+
 	// Variables
 	static CARGA_HandleTypeDef CARGAPresente;
 	CARGA_HandleTypeDef *CARGAUpdate;
@@ -726,9 +729,6 @@ void StartDefaultTask(void const * argument)
 	//potencia ant para filtro ema
 	uint32_t potencia_ant = 0;
 
-	// Contador cada 20 mediciones envio a pantalla aprox 100ms
-	uint8_t i = 20;
-
 	//Puntero a cadena transmision
 	char *p_tx;
 
@@ -737,6 +737,7 @@ void StartDefaultTask(void const * argument)
 
 	//Puntero a estructura pid
 	PID_TypeDef* p_pid = NULL;
+	uint32_t referencia = 0;
 
 	// Inicializo variable carga electronica
 	CARGAPresente.modo =  m_apagado;
@@ -750,16 +751,32 @@ void StartDefaultTask(void const * argument)
 	/* definition and creation of defaultTask */
 	osThreadDef(ethTask, eth_task, osPriorityAboveNormal, 0, 4096);
 	ethTask = osThreadCreate(osThread(ethTask), NULL);//ME GUSTARIA QUE FUERA UN PUNTERO
-	p_eth = &CARGAPresente;
 
 	/* Inicializo DAC */
 	DAC_init();
 
+	/* Inicializo Fecha en GUI */
+	//Espero 3 segundos que se inicialice GUI
+	osDelay(3000);
+	if(!fecha_act){
+		p_tx = osPoolAlloc(mpool);
+		if( p_tx != NULL ){
+			sprintf(p_tx,"hmU%02d%02d%02d%02d%02d",sTime.Hours,\
+					sTime.Minutes, sDate.Date, sDate.Month, sDate.Year);
+
+			// Envio la cadena a transmitir task comunicacion_spi
+			osMessagePut(colaSPI_TX, (uint32_t)p_tx, osWaitForever);
+		}
+		fecha_act = true;
+	}
+
 	/* Infinite loop */
 	for (;;)
 	{
-		evt = osMessageGet(colaMediciones, 5);
+		//Leo tension y corriente de la cola mediciones que envio la tarea medicion_variables.
+		evt = osMessageGet(colaMediciones, 25);
 		if(evt.status == osEventMessage){
+			//Se tomo la medicion
 			p_mediciones = evt.value.p;
 			//Actualizo las variables de la carga electronica y verifico
 			CARGAPresente.valorCorriente = (uint32_t)p_mediciones->corriente;
@@ -769,42 +786,29 @@ void StartDefaultTask(void const * argument)
 			potencia_ant = CARGAPresente.valorPotencia;
 			// Liberar memoria asignada para el mensaje
 			osPoolFree(mpoolMediciones, p_mediciones);
+
+		}else if(evt.status == osEventTimeout){
+			//Error en la tasa de muestreo de la medicion
 		}
 
-		// En modo tension o potencia tienen que pasar 10 veces para que se mande al ESP32 / En modo corriente solo 1 vez
-		if( --i == 0){
-			// Inicio comunicacion con ESP32 a traves de task comunicacion_spi
-			p_tx = osPoolAlloc(mpool);
-			if( p_tx != NULL ){
+		// Envio estado actual de la carga a la GUI
+		p_tx = osPoolAlloc(mpool);
+		if( p_tx != NULL ){
 
-				// Carga la cadena a transmitir
-				sprintf(p_tx,"hmM%02luC%04luV%04luP%04lu",(uint32_t)CARGAPresente.modo,\
-						(uint32_t)CARGAPresente.valorCorriente/10,\
-						(uint32_t)CARGAPresente.valorTension/10,\
-						(uint32_t)CARGAPresente.valorPotencia/10);
+			// Carga la cadena a transmitir
+			sprintf(p_tx,"hmM%02luC%04luV%04luP%04lu",(uint32_t)CARGAPresente.modo,\
+					(uint32_t)CARGAPresente.valorCorriente/10,\
+					(uint32_t)CARGAPresente.valorTension/10,\
+					(uint32_t)CARGAPresente.valorPotencia/10);
 
-				// Envio la cadena a transmitir task comunicacion_spi
-				osMessagePut(colaSPI_TX, (uint32_t)p_tx, osWaitForever);
-			}
-
-			if(!fecha_act){
-				p_tx = osPoolAlloc(mpool);
-				if( p_tx != NULL ){
-					sprintf(p_tx,"hmU%02d%02d%02d%02d%02d",sTime.Hours,\
-							sTime.Minutes, sDate.Date, sDate.Month, sDate.Year);
-
-					// Envio la cadena a transmitir task comunicacion_spi
-					osMessagePut(colaSPI_TX, (uint32_t)p_tx, osWaitForever);
-				}
-				fecha_act = true;
-			}
-			// Reseteo contador
-			i = 20;
+			// Envio la cadena a transmitir task comunicacion_spi
+			osMessagePut(colaSPI_TX, (uint32_t)p_tx, 25);
 		}
 
-		//Recibo msj de la tarea comunicacion
-		evt = osMessageGet(colaCARGA, 1);
+		//Recibo msj de la GUI
+		evt = osMessageGet(colaCARGA, 40);
 		if(evt.status == osEventMessage){
+			//Recibi el msj de la GUI
 			CARGAUpdate = evt.value.p;
 
 			//Interpreto si hubo un cambio de modo
@@ -818,61 +822,65 @@ void StartDefaultTask(void const * argument)
 			osPoolFree(mpoolCARGA_Handle, CARGAUpdate);
 			CARGAUpdate = NULL;
 		}
+		else if(evt.status == osEventTimeout){
+			//No recibi msj de la GUI en 200mS
+		}
+
+		/* Controlo la carga electronica */
+		switch(CARGAPresente.modo){
+		/* Apago la carga */
+		case m_apagado:
+		case m_bateria_off:
+		case m_corriente_off:
+		case m_fusible_off:
+		case m_potenica_off:
+		case m_tension_off:
+			DAC_set(0);
+			referencia = 0;
+			break;
+
+		case m_corriente:
+			/* Modo corriente constante */
+			if(CARGAPresente.setPoint > 30000)
+				CARGAPresente.setPoint = 0;
+			referencia= CARGAPresente.setPoint;
+			break;
+
+		case m_potencia:
+			/* Modo potencia constante */
+			if( CARGAPresente.setPoint > 500000){
+				CARGAPresente.setPoint =  0;
+			}
+			if( CARGAPresente.valorTension != 0)
+				referencia =  CARGAPresente.setPoint * 1000 / CARGAPresente.valorTension ;
+			else
+				referencia = 0;
+			break;
+
+		case m_tension:
+			break;
+
+		case m_bateria:
+			break;
+		case m_fusible:
+			break;
+
+		default:
+		}
 
 		//Reservo espacio para enviar msj a cola PID
 		p_pid = osPoolAlloc(mpoolPID);
-
 		if( p_pid != NULL){
-
-			//Guardo el valor de corriente en el mpool
-			p_pid->señal = CARGAPresente.valorCorriente;
-
-			/* Controlo la carga electronica */
-			switch(CARGAPresente.modo){
-			/* Apago la carga */
-			case m_apagado:
-			case m_bateria_off:
-			case m_corriente_off:
-			case m_fusible_off:
-			case m_potenica_off:
-			case m_tension_off:
-				DAC_set(0);
-				p_pid->referencia = 0;
-				break;
-
-			case m_corriente:
-				/* Modo corriente constante */
-				if(CARGAPresente.setPoint > 30000)
-					CARGAPresente.setPoint = 0;
-				//DAC_set(CARGAPresente.setPoint/10); //Convierto mA a salida DAC. IMPORTANTISIMO EL /10
-				p_pid->referencia = CARGAPresente.setPoint;
-				break;
-
-			case m_potencia:
-				/* Modo potencia constante */
-				uint32_t aux_corriente=0;
-				if( CARGAPresente.setPoint > 500000){
-					CARGAPresente.setPoint =  0;
-				}
-				if( CARGAPresente.valorTension != 0)
-					aux_corriente =  CARGAPresente.setPoint * 1000 / CARGAPresente.valorTension ;
-				//DAC_set(aux_corriente/10);//Convierto mA a salida DAC. IMPORTANTISIMO EL /10
-				p_pid->referencia = aux_corriente;
-				break;
-
-			case m_tension:
-				break;
-
-			case m_bateria:
-				break;
-			case m_fusible:
-				break;
-
-			default:
-			}
-
-			osMessagePut(colaPID, (uint32_t)p_pid, osWaitForever);
+			//Guardo el valor de referencia y modo a enviar
+			p_pid->modo = CARGAPresente.modo;
+			p_pid->referencia = referencia;
+			osMessagePut(colaPID, (uint32_t)p_pid, 10);
 		}
+		if(CARGAPresente.flagTrigger == 0)
+			osSignalSet(pid_taskHandle,signal_cargaON);
+
+		//Tarea periodica 100mS
+		osDelayUntil(&previosWakeTime, 100);
 
 	}
   /* USER CODE END 5 */
@@ -894,7 +902,10 @@ void medicion_variables(void const * argument)
   float current = 0, current_ant = 0;
 
   // Estructura mediciones
-  MEDICIONES_TypeDef* cargaMediciones;
+  MEDICIONES_TypeDef* cargaMediciones, *cargaMediciones_lenta;
+
+  //contador
+  uint8_t i = 0;
 
   // Rango 160V False - 16V True
   bool rango = false;
@@ -967,11 +978,21 @@ void medicion_variables(void const * argument)
 		  // Guardo los valores de las variables a enviar.
 		  cargaMediciones->corriente = current;
 		  cargaMediciones->tension = tension;
-		  osMessagePut(colaMediciones, (uint32_t)cargaMediciones, osWaitForever);
+		  osMessagePut(colaMediciones_pid, (uint32_t)cargaMediciones, osWaitForever);
+		  if( i++ == 20){
+			  cargaMediciones_lenta = osPoolAlloc(mpoolMediciones);
+			  if ( cargaMediciones_lenta != NULL ){
+				  // Guardo los valores de las variables a enviar.
+				  cargaMediciones_lenta->corriente = current;
+				  cargaMediciones_lenta->tension = tension;
+			  }
+			  osMessagePut(colaMediciones, (uint32_t)cargaMediciones_lenta, 0);
+			  i = 0;
+		  }
 	  }
 	  else{
 		  // Si no hay lugar en la cola mediciones espero 100ms
-		  osDelay(100);
+		  osDelay(10);
 	  }
   }
 
@@ -1062,7 +1083,6 @@ void comunicacion_spi(void const * argument)
 			// Liberar memoria asignada para el mensaje recibido
 			osPoolFree(mpool, pArrayFromCola);
 
-			osDelay(30);
 		}
 	}
 
@@ -1087,6 +1107,10 @@ void pid_control(void const * argument)
 
 	//Puntero a estructura pid
 	PID_TypeDef *p = NULL;
+	enum modos_carga modo = m_apagado;
+
+	//Puntero a mediciones de V e I
+	MEDICIONES_TypeDef* p_mediciones;
 
 	pid_min = PID_MIN;
 	pid_max = PID_MAX;
@@ -1102,49 +1126,73 @@ void pid_control(void const * argument)
 	/* Infinite loop */
 	for(;;)
 	{
-		evt = osMessageGet(colaPID, 0);
+		evt = osSignalWait(signal_cargaON, osWaitForever);
+		if(evt.status == osEventSignal){
+			//Recibi señal para comenzar
 
-		if(evt.status == osEventMessage){
+			/* Mientras no llegue un 0 de referencia */
+			while(1){
 
-			p = evt.value.p;
-			yT = (float)p->señal; //Señal de corriente
-			rT = (float)p->referencia; //Señal de referencia
+				//Recibo señal de referencia y modo
+				evt = osMessageGet(colaPID, 0);
+				if(evt.status == osEventMessage){
 
-			osPoolFree(mpoolPID, p);
+					p = evt.value.p;
+					modo = (enum modos_carga)p->modo;
+					//yT = (float)p->señal; //Señal de corriente
+					rT = (float)p->referencia; //Señal de referencia
+					osPoolFree(mpoolPID, p);
+					if(rT <= 0)
+						break;
+				}
+
+				//Recibo valor de corriente medida
+				evt = osMessageGet(colaMediciones_pid, osWaitForever);
+				if(evt.status == osEventMessage){
+
+					p_mediciones = evt.value.p;
+					//Leo el valor de corriente
+					yT = p_mediciones->corriente; //Señal de corriente
+					// Liberar memoria asignada para el mensaje
+					osPoolFree(mpoolMediciones, p_mediciones);
+				}
+
+
+				//Hago las tareas del pid
+				if(rT != 0){
+					//Si la referencia es distinta de 0
+
+					eT = rT - yT; //Cálculo error corriente
+
+					iT = b * ( eT + eT0 ) + iT0; //Cálculo del término integral corriente
+
+					/*Limite termino integral corriente*/
+					if ( iT > pid_max )
+						iT = pid_max; //Salida integral si es mayor que el MAX
+					else if ( iT < pid_min )
+						iT = pid_min; //Salida integral si es menor que el MIN
+
+					dT = -c * ( yT - yT0 );	//Cálculo del término derivativo corriente
+					uT = iT + a * eT + dT; //Cálculo de la salida PID corriente
+
+					/*Limite PID corriente*/
+					if ( uT > pid_max )
+						uT = pid_max;           //Salida PID si es mayor que el MAX
+					else if ( uT < pid_min )
+						uT = pid_min;      //Salida PID si es menor que el MIN
+
+					/* Guardar variables */
+					iT0 = iT;
+					eT0 = eT;
+					yT0 = yT;
+
+					DAC_set(uT);
+				}
+
+				//Bloqueo la tarea 5mS
+				osDelay(5);
+			}
 		}
-
-
-		if(rT != 0){
-			//Si la referencia es distinta de 0
-
-			eT = rT - yT; //Cálculo error corriente
-
-			iT = b * ( eT + eT0 ) + iT0; //Cálculo del término integral corriente
-
-			/*Limite termino integral corriente*/
-			if ( iT > pid_max )
-				iT = pid_max; //Salida integral si es mayor que el MAX
-			else if ( iT < pid_min )
-				iT = pid_min; //Salida integral si es menor que el MIN
-
-			dT = -c * ( yT - yT0 );	//Cálculo del término derivativo corriente
-			uT = iT + a * eT + dT; //Cálculo de la salida PID corriente
-
-			/*Limite PID corriente*/
-			if ( uT > pid_max )
-				uT = pid_max;           //Salida PID si es mayor que el MAX
-			else if ( uT < pid_min )
-				uT = pid_min;      //Salida PID si es menor que el MIN
-
-			/* Guardar variables */
-			iT0 = iT;
-			eT0 = eT;
-			yT0 = yT;
-
-			DAC_set(uT);
-		}
-
-		osDelay(5);
 	}
   /* USER CODE END pid_control */
 }

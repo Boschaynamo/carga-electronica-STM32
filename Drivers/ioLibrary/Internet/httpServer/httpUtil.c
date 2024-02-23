@@ -13,8 +13,9 @@
 #include <string.h>
 #include <stdlib.h>
 #include "httpUtil.h"
+#include "cmsis_os.h"
 
-extern enum modos_carga{
+enum modos_carga{
 	m_apagado = 0,
 	m_corriente_off,
 	m_tension_off,
@@ -40,18 +41,36 @@ typedef struct
 
 } CARGA_HandleTypeDef;
 
+typedef struct{
+	float tension;
+	float corriente;
+} MEDICIONES_TypeDef;
 
-extern CARGA_HandleTypeDef * p_eth;
+
+extern osMessageQId colaMediciones;
 
 uint8_t http_get_cgi_handler(uint8_t *uri_name, uint8_t *buf, uint32_t *file_len)
 {
+	osEvent evt;
+
 	uint8_t ret = HTTP_OK;
 	uint16_t len = 0;
+
+	MEDICIONES_TypeDef *p_mediciones;
+
 	uint32_t tension = 0, corriente = 0, potencia = 0, setpoint = 0;
-	tension = p_eth->valorTension;
-	corriente = p_eth->valorCorriente;
-	potencia = p_eth->valorPotencia;
-	setpoint = p_eth->setPoint;
+
+
+	evt = osMessagePeek(colaMediciones, 0);
+	if(evt.status == osEventMessage){
+		//Se tomo la medicion
+		p_mediciones = evt.value.p;
+
+		tension = (uint32_t)p_mediciones->tension;
+		corriente = (uint32_t)p_mediciones->corriente;
+	}
+
+
 
 	if (predefined_get_cgi_processor(uri_name, buf, &len))
 	{
