@@ -184,7 +184,7 @@ void eth_task (void const * argument){
 		while(1){
 			//HTTP inicio
 			for(uint8_t j = 0; j < 4; j++)	httpServer_run(j); 	// HTTP Server handler
-			osDelay(250);
+			osDelay(509);
 		}
 	}
 }
@@ -748,7 +748,7 @@ void StartDefaultTask(void const * argument)
 	CARGAPresente.flagTrigger = 0;
 
 	/* definition and creation of defaultTask */
-	osThreadDef(ethTask, eth_task, osPriorityAboveNormal, 0, 512);
+	osThreadDef(ethTask, eth_task, osPriorityAboveNormal, 0, 4096);
 	ethTask = osThreadCreate(osThread(ethTask), NULL);//ME GUSTARIA QUE FUERA UN PUNTERO
 	p_eth = &CARGAPresente;
 

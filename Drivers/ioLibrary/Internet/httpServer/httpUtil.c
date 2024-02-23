@@ -47,7 +47,7 @@ uint8_t http_get_cgi_handler(uint8_t *uri_name, uint8_t *buf, uint32_t *file_len
 {
 	uint8_t ret = HTTP_OK;
 	uint16_t len = 0;
-	static uint32_t tension = 0, corriente = 0, potencia = 0, setpoint = 0;
+	uint32_t tension = 0, corriente = 0, potencia = 0, setpoint = 0;
 	tension = p_eth->valorTension;
 	corriente = p_eth->valorCorriente;
 	potencia = p_eth->valorPotencia;
