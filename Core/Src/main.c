@@ -64,6 +64,7 @@ typedef struct
 typedef struct{
 	float tension;
 	float corriente;
+	float potencia;
 } MEDICIONES_TypeDef;
 
 /* Estructura pid */
@@ -736,6 +737,8 @@ void StartDefaultTask(void const * argument)
 	//osDelayUntil
 	uint32_t previosWakeTime = osKernelSysTick();
 
+	uint32_t max = 0, min = 30000;
+
 	// Variables
 	static CARGA_HandleTypeDef CARGAPresente;
 	CARGA_HandleTypeDef *CARGAUpdate;
@@ -743,9 +746,6 @@ void StartDefaultTask(void const * argument)
 
 	//flag fecha actualizada
 	bool fecha_act = false;
-
-	//potencia ant para filtro ema
-	uint32_t potencia_ant = 0;
 
 	//Puntero a cadena transmision
 	char *p_tx;
@@ -799,11 +799,15 @@ void StartDefaultTask(void const * argument)
 			//Actualizo las variables de la carga electronica y verifico
 			CARGAPresente.valorCorriente = (uint32_t)p_mediciones->corriente;
 			CARGAPresente.valorTension = (uint32_t)p_mediciones->tension;
-			CARGAPresente.valorPotencia = potencia_ant * (1-0.4)\
-					+ 0.4 *(uint32_t)(p_mediciones->corriente * p_mediciones->tension)/1000;
-			potencia_ant = CARGAPresente.valorPotencia;
+			CARGAPresente.valorPotencia = (uint32_t)p_mediciones->potencia;
 			// Liberar memoria asignada para el mensaje
 			osPoolFree(mpoolMediciones, p_mediciones);
+
+			if(CARGAPresente.valorCorriente > max)
+				max = CARGAPresente.valorCorriente;
+
+			if(CARGAPresente.valorCorriente < min && CARGAPresente.valorCorriente >= 0)
+				min = CARGAPresente.valorCorriente;
 
 		}else if(evt.status == osEventTimeout){
 			//Error en la tasa de muestreo de la medicion
@@ -817,7 +821,7 @@ void StartDefaultTask(void const * argument)
 			sprintf(p_tx,"hmM%02luC%04luV%04luP%04lu",(uint32_t)CARGAPresente.modo,\
 					(uint32_t)CARGAPresente.valorCorriente/10,\
 					(uint32_t)CARGAPresente.valorTension/10,\
-					(uint32_t)CARGAPresente.valorPotencia/10);
+					(uint32_t)CARGAPresente.valorPotencia/100);
 
 			// Envio la cadena a transmitir task comunicacion_spi
 			osMessagePut(colaSPI_TX, (uint32_t)p_tx, 25);
@@ -866,13 +870,9 @@ void StartDefaultTask(void const * argument)
 
 		case m_potencia:
 			/* Modo potencia constante */
-			if( CARGAPresente.setPoint > 500000){
+			if( CARGAPresente.setPoint > 500000)
 				CARGAPresente.setPoint =  0;
-			}
-			if( CARGAPresente.valorTension != 0)
-				referencia =  CARGAPresente.setPoint * 1000 / CARGAPresente.valorTension ;
-			else
-				referencia = 0;
+			referencia = CARGAPresente.setPoint;
 			break;
 
 		case m_tension:
@@ -916,6 +916,10 @@ void medicion_variables(void const * argument)
   /* USER CODE BEGIN medicion_variables */
   float tension = 0, tension_ant = 0;
   float current = 0, current_ant = 0;
+  float potencia = 0, potencia_ant = 0;
+  float tension_gui = 0, tension_gui_ant = 0;
+  float current_gui = 0, current_gui_ant = 0;
+  float potencia_gui = 0, potencia_gui_ant = 0;
 
   osEvent evt;
 
@@ -941,10 +945,20 @@ void medicion_variables(void const * argument)
 	  /* Medicion de Corriente con filtro EMA */
 	  current = current_ant * (1 - 0.8) + 0.8 * ADC_read_current(&hi2c1);
 	  current_ant = current;
+	  current_gui = current_gui_ant * (1-0.2) + 0.2 * current;
+	  current_gui_ant = current_gui;
 
 	  /* Medicion de Tension con filtro EMA*/
-	  tension = tension_ant * (1 - 0.6) + 0.6 * ADC_read_tension(&hi2c1, rango);
+	  tension = tension_ant * (1 - 0.8) + 0.8 * ADC_read_tension(&hi2c1, rango);
 	  tension_ant = tension;
+	  tension_gui = tension_gui_ant * (1-0.4) + 0.4 * tension;
+	  tension_gui_ant = tension_gui;
+
+	  /* Medicion de Potencia con filtro EMA */
+	  potencia = potencia_ant  * (1 - 0.8) + 0.8 * (tension * current)/1000;
+	  potencia_ant = potencia;
+	  potencia_gui = potencia_gui_ant * (1-0.3) + 0.3 * potencia;
+	  potencia_gui_ant = potencia_gui;
 
 	  // Si la tension < 0 normalizo
 	  if (tension < 0)
@@ -988,12 +1002,13 @@ void medicion_variables(void const * argument)
 	  }
 
 	  // Envio las mediciones tasa 10Hz.
-	  if( i++ == 20){
+	  if( i++ == 6){
 		  cargaMediciones_lenta = osPoolAlloc(mpoolMediciones);
 		  if ( cargaMediciones_lenta != NULL ){
 			  // Guardo los valores de las variables a enviar.
-			  cargaMediciones_lenta->corriente = current;
-			  cargaMediciones_lenta->tension = tension;
+			  cargaMediciones_lenta->corriente = current_gui;
+			  cargaMediciones_lenta->tension = tension_gui;
+			  cargaMediciones_lenta->potencia = potencia_gui;
 			  osMessagePut(colaMediciones, (uint32_t)cargaMediciones_lenta, 0);
 		  }
 		  cargaMediciones = NULL;
@@ -1007,6 +1022,7 @@ void medicion_variables(void const * argument)
 		  if ( cargaMediciones != NULL ){
 			  cargaMediciones->corriente = current;
 			  cargaMediciones->tension = tension;
+			  cargaMediciones->potencia = potencia;
 			  osMessagePut(colaMediciones_pid, (uint32_t)cargaMediciones, 5);
 		  }
 		  cargaMediciones = NULL;
@@ -1134,8 +1150,7 @@ void pid_control(void const * argument)
 	float a,b,c;                       		//constantes del PID voltaje
 	float rT,eT,iT,dT,yT,yT0,uT,iT0,eT0;   	//variables de ecuaciones de PID voltaje
 	float pid_max,pid_min;             		//límites máximo y mínimo de control.
-
-	float max=0,min=30000;
+	float setpoint_potencia = 0;			//setpoint potencia
 
 	osEvent evt;
 
@@ -1169,8 +1184,12 @@ void pid_control(void const * argument)
 
 			p = evt.value.p;
 			modo = (enum modos_carga)p->modo;
-			//yT = (float)p->señal; //Señal de corriente
-			rT = (float)p->referencia; //Señal de referencia
+			if(modo == m_corriente)
+				rT = (float)p->referencia; //Señal de referencia
+			else if(modo == m_potencia)
+				setpoint_potencia = (float)p->referencia;
+
+			//Libero memoria asignada para el msj
 			osPoolFree(mpoolPID, p);
 		}
 
@@ -1187,13 +1206,13 @@ void pid_control(void const * argument)
 				p_mediciones = evt.value.p;
 				//Leo el valor de corriente
 				yT = p_mediciones->corriente; //Señal de corriente
+
+				if(modo == m_potencia)
+					if( p_mediciones->tension > 0)
+						rT = setpoint_potencia * 1000 / p_mediciones->tension;
+
 				// Liberar memoria asignada para el mensaje
 				osPoolFree(mpoolMediciones_pid, p_mediciones);
-				if(yT > max)
-					max = yT;
-
-				if(yT < min && yT >= 0)
-					min = yT;
 			}
 
 			//Hago las tareas del pid
@@ -1227,6 +1246,8 @@ void pid_control(void const * argument)
 				DAC_set(uT);
 				//DAC_set(100);
 			}
+			else
+				DAC_set(0);
 
 			//Bloqueo la tarea 5mS
 			osDelayUntil(&previosWakeTime, 15);
