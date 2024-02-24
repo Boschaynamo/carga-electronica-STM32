@@ -114,7 +114,7 @@ void ADC_set_rdypin(I2C_HandleTypeDef *hi2c){
 	buffer[1] = (uint8_t)(buffer16 >> 8);
 	buffer[2] = (uint8_t)(buffer16);
 	HAL_I2C_Master_Transmit(hi2c, ADC_ADDR, buffer, 3, HAL_MAX_DELAY);
-	osDelay(1);
+	osDelay(2);
 
 	/* Cargo el registro bajo con 0x0000 */
 	buffer[0] = (uint8_t)LO_THRESH_REGISTER;
@@ -123,6 +123,6 @@ void ADC_set_rdypin(I2C_HandleTypeDef *hi2c){
 	buffer[1] = (uint8_t)(buffer16 >> 8);
 	buffer[2] = (uint8_t)(buffer16);
 	HAL_I2C_Master_Transmit(hi2c, ADC_ADDR, buffer, 3, HAL_MAX_DELAY);
-	osDelay(1);
+	osDelay(2);
 
 }

@@ -848,6 +848,7 @@ void StartDefaultTask(void const * argument)
 				// Envio la cadena a transmitir task comunicacion_spi
 				osMessagePut(colaSPI_TX, (uint32_t)p_tx, osWaitForever);
 			}
+			p_tx = NULL;
 		}
 		fecha_act = true;
 	}
@@ -986,7 +987,7 @@ void medicion_variables(void const * argument)
   float potencia_gui = 0, potencia_gui_ant = 0;
 
   // Estructura mediciones
-  MEDICIONES_TypeDef* cargaMediciones, *cargaMediciones_lenta;
+  MEDICIONES_TypeDef *cargaMediciones, *cargaMediciones_lenta;
 
   //contador
   uint8_t i = 0;
