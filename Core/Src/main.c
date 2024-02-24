@@ -986,11 +986,16 @@ void medicion_variables(void const * argument)
   float current_gui = 0, current_gui_ant = 0;
   float potencia_gui = 0, potencia_gui_ant = 0;
 
+  /* Para poner a punto escalas y offset - Comentar si esta calibrado  */
+  //float promedio = 0, c_mediciones=0;
+  //HAL_GPIO_WritePin(VSCALE_GPIO_Port, VSCALE_Pin, GPIO_PIN_SET);//Rango 16V
+  //HAL_GPIO_WritePin(VSCALE_GPIO_Port, VSCALE_Pin, GPIO_PIN_RESET);//Rango 160V
+
   // Estructura mediciones
   MEDICIONES_TypeDef *cargaMediciones, *cargaMediciones_lenta;
 
-  //contador
-  uint8_t i = 0;
+  //contador para tarea carga control
+  uint8_t i=0;
 
   // Rango 160V False - 16V True
   bool rango = false;
@@ -1106,6 +1111,7 @@ void medicion_variables(void const * argument)
 	  osDelayUntil(&previosWakeTime, 15);
 	  HAL_GPIO_TogglePin(prueba_GPIO_Port, prueba_Pin);
   }
+
 
   /* USER CODE END medicion_variables */
 }

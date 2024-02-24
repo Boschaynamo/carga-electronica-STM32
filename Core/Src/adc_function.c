@@ -50,7 +50,6 @@ float ADC_read_tension (I2C_HandleTypeDef *hi2c, bool rango){
 	// Espero que la conversion este lista - verificando pin ready
 	while (HAL_GPIO_ReadPin(ADC_RDY_GPIO_Port, ADC_RDY_Pin)){
 	}
-
 	HAL_I2C_Master_Receive(hi2c, ADC_ADDR, buffer, 2, HAL_MAX_DELAY);
 
 	buffer16 = buffer[0] << 8 | buffer[1];
@@ -99,7 +98,7 @@ static void ADC_set (I2C_HandleTypeDef *hi2c, enum input_to_measure entrada){
 
 	buffer[0] = (uint8_t)CONVERSION_REGISTER;
 	HAL_I2C_Master_Transmit(hi2c, ADC_ADDR, buffer, 1, HAL_MAX_DELAY);
-	osDelay(7);
+	osDelay(5);
 }
 
 void ADC_set_rdypin(I2C_HandleTypeDef *hi2c){
