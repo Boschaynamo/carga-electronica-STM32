@@ -44,13 +44,13 @@ typedef struct
 typedef struct{
 	float tension;
 	float corriente;
+	float potencia;
 } MEDICIONES_TypeDef;
-
 
 extern osMessageQId colaMediciones_eth;
 extern osPoolId mpoolMediciones_eth;
 
-extern osThreadId medicionHandle;
+extern osSemaphoreId sph_eth_medicionesHandle;
 
 uint8_t http_get_cgi_handler(uint8_t *uri_name, uint8_t *buf, uint32_t *file_len)
 {
@@ -61,9 +61,9 @@ uint8_t http_get_cgi_handler(uint8_t *uri_name, uint8_t *buf, uint32_t *file_len
 
 	MEDICIONES_TypeDef *p_mediciones;
 
-	 uint32_t tension = 0, corriente = 0, potencia = 0, setpoint = 0;
+	static uint32_t tension = 0, corriente = 0, potencia = 0, setpoint = 0;
 
-	osSignalSet(medicionHandle, 0x02);
+	osSemaphoreRelease(sph_eth_medicionesHandle);
 	evt = osMessageGet(colaMediciones_eth, 10);
 	if(evt.status == osEventMessage){
 		//Se tomo la medicion
@@ -71,6 +71,7 @@ uint8_t http_get_cgi_handler(uint8_t *uri_name, uint8_t *buf, uint32_t *file_len
 
 		tension = (uint32_t)p_mediciones->tension;
 		corriente = (uint32_t)p_mediciones->corriente;
+		potencia = (uint32_t)p_mediciones->potencia;
 
 		osPoolFree(mpoolMediciones_eth, p_mediciones);
 	}

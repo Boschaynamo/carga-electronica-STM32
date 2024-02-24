@@ -111,9 +111,11 @@ osThreadId defaultTaskHandle;
 osThreadId medicionHandle;
 osThreadId comunicacionHandle;
 osThreadId pid_taskHandle;
+osThreadId Task_ethHandle;
+osSemaphoreId sph_pid_medicionesHandle;
+osSemaphoreId sph_eth_medicionesHandle;
 /* USER CODE BEGIN PV */
 /* Definicion de tarea Ethernet  */
-osThreadId ethTask;
 
 /* Memory pool para comunicacion spi */
 osPoolDef(mpool, 5, char[21]); // Define memory pool
@@ -162,6 +164,7 @@ void StartDefaultTask(void const * argument);
 void medicion_variables(void const * argument);
 void comunicacion_spi(void const * argument);
 void pid_control(void const * argument);
+void eth_task(void const * argument);
 
 /* USER CODE BEGIN PFP */
 /* Prototipos funciones DAC MCP4725 I2C */
@@ -178,20 +181,7 @@ void eth_task (void const * argument); //tarea ethernet
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-void eth_task (void const * argument){
 
-	while(1){
-
-		/* Inicializo ethernet */
-		eth_start();
-
-		while(1){
-			//HTTP inicio
-			for(uint8_t j = 0; j < 4; j++)	httpServer_run(j); 	// HTTP Server handler
-			osDelay(509);
-		}
-	}
-}
 /* USER CODE END 0 */
 
 /**
@@ -234,6 +224,15 @@ int main(void)
   /* USER CODE BEGIN RTOS_MUTEX */
   /* add mutexes, ... */
   /* USER CODE END RTOS_MUTEX */
+
+  /* Create the semaphores(s) */
+  /* definition and creation of sph_pid_mediciones */
+  osSemaphoreDef(sph_pid_mediciones);
+  sph_pid_medicionesHandle = osSemaphoreCreate(osSemaphore(sph_pid_mediciones), 1);
+
+  /* definition and creation of sph_eth_mediciones */
+  osSemaphoreDef(sph_eth_mediciones);
+  sph_eth_medicionesHandle = osSemaphoreCreate(osSemaphore(sph_eth_mediciones), 1);
 
   /* USER CODE BEGIN RTOS_SEMAPHORES */
   /* add semaphores, ... */
@@ -280,8 +279,13 @@ int main(void)
   osThreadDef(pid_task, pid_control, osPriorityAboveNormal, 0, 128);
   pid_taskHandle = osThreadCreate(osThread(pid_task), NULL);
 
+  /* definition and creation of Task_eth */
+  osThreadDef(Task_eth, eth_task, osPriorityNormal, 0, 2048);
+  Task_ethHandle = osThreadCreate(osThread(Task_eth), NULL);
+
   /* USER CODE BEGIN RTOS_THREADS */
-//  /* add threads, ... */
+  osSemaphoreWait(sph_eth_medicionesHandle, osWaitForever);
+  osSemaphoreWait(sph_pid_medicionesHandle, osWaitForever);
   /* USER CODE END RTOS_THREADS */
 
   /* Start scheduler */
@@ -766,10 +770,6 @@ void StartDefaultTask(void const * argument)
 	CARGAPresente.flagFecha = 0;
 	CARGAPresente.flagTrigger = 0;
 
-	/* definition and creation of defaultTask */
-//	osThreadDef(ethTask, eth_task, osPriorityNormal, 0, 2048);
-//	ethTask = osThreadCreate(osThread(ethTask), NULL);//ME GUSTARIA QUE FUERA UN PUNTERO
-
 	/* Inicializo DAC */
 	DAC_init();
 
@@ -921,8 +921,6 @@ void medicion_variables(void const * argument)
   float current_gui = 0, current_gui_ant = 0;
   float potencia_gui = 0, potencia_gui_ant = 0;
 
-  osEvent evt;
-
   // Estructura mediciones
   MEDICIONES_TypeDef* cargaMediciones, *cargaMediciones_lenta;
 
@@ -1014,10 +1012,9 @@ void medicion_variables(void const * argument)
 		  cargaMediciones = NULL;
 		  i = 0;
 	  }
-	  // Envio las mediciones a tarea pid
 
-	  evt = osSignalWait(0x01, 0);
-	  if( evt.status == osEventSignal){
+	  // Envio las mediciones a tarea pid
+	  if( osSemaphoreWait(sph_pid_medicionesHandle, 0) > 0){
 		  cargaMediciones = osPoolAlloc(mpoolMediciones_pid);
 		  if ( cargaMediciones != NULL ){
 			  cargaMediciones->corriente = current;
@@ -1028,16 +1025,17 @@ void medicion_variables(void const * argument)
 		  cargaMediciones = NULL;
 	  }
 
-//	  evt = osSignalWait(0x02, 1);
-//	  if( evt.status == osEventSignal){
-//		  cargaMediciones = osPoolAlloc(mpoolMediciones_eth);
-//		  if ( cargaMediciones != NULL ){
-//			  cargaMediciones->corriente = current;
-//			  cargaMediciones->tension = tension;
-//			  osMessagePut(colaMediciones_eth, (uint32_t)cargaMediciones, 0);
-//		  }
-//		  cargaMediciones = NULL;
-//	  }
+	  //Envio las mediciones a tarea eth_task
+	  if( osSemaphoreWait(sph_eth_medicionesHandle, 0) > 0){
+		  cargaMediciones = osPoolAlloc(mpoolMediciones_eth);
+		  if ( cargaMediciones != NULL ){
+			  cargaMediciones->corriente = current_gui;
+			  cargaMediciones->tension = tension_gui;
+			  cargaMediciones->potencia = potencia_gui;
+			  osMessagePut(colaMediciones_eth, (uint32_t)cargaMediciones, 5);
+		  }
+		  cargaMediciones = NULL;
+	  }
 
 	  // Bloqueo la tarea 5ms * 10 veces = 50mS
 	  osDelayUntil(&previosWakeTime, 15);
@@ -1104,8 +1102,7 @@ void comunicacion_spi(void const * argument)
 					//Aca hago el trigger
 					updateCarga->flagTrigger = array_SPI_RX[13];
 					if (array_SPI_RX[13] == '1')
-					{
-						// TRIGGER ACTIVADO Y LISTO PARA EL SERVICIO
+					{// TRIGGER ACTIVADO Y LISTO PARA EL SERVICIO
 						__NOP();
 					}
 
@@ -1197,7 +1194,7 @@ void pid_control(void const * argument)
 		if(modo == m_corriente || modo == m_potencia){
 
 			//Le digo a mediciones que quiero el dato
-			osSignalSet(medicionHandle, 0x01);
+			osSemaphoreRelease(sph_pid_medicionesHandle);
 
 			//Recibo valor de corriente medida
 			evt = osMessageGet(colaMediciones_pid, osWaitForever);
@@ -1257,6 +1254,31 @@ void pid_control(void const * argument)
 
 	}
   /* USER CODE END pid_control */
+}
+
+/* USER CODE BEGIN Header_eth_task */
+/**
+* @brief Function implementing the Task_eth thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_eth_task */
+void eth_task(void const * argument)
+{
+  /* USER CODE BEGIN eth_task */
+  /* Infinite loop */
+  for(;;)
+  {
+	  /* Inicializo ethernet */
+	  eth_start();
+
+	  while(1){
+		  //HTTP inicio
+		  for(uint8_t j = 0; j < 4; j++)	httpServer_run(j); 	// HTTP Server handler
+		  osDelay(250);
+	  }
+  }
+  /* USER CODE END eth_task */
 }
 
 /**
