@@ -83,9 +83,9 @@ typedef struct{
 #define MASK_DAC_READ 0b00001111
 
 // Definiciones PID
-#define PID_A 0.05
-#define PID_B 0.005
-#define PID_C 0.1
+#define PID_A 0.12
+#define PID_B 0.08
+#define PID_C 0.01
 #define PID_MAX 3000
 #define PID_MIN 0
 #define PID_SETPOINT 0.0
@@ -1293,31 +1293,35 @@ void pid_control(void const * argument)
 
 				eT = rT - yT; //Cálculo error corriente
 
-				iT = b * ( eT + eT0 ) + iT0; //Cálculo del término integral corriente
+				if(eT > 11 || eT < 11){
 
-				/*Limite termino integral corriente*/
-				if ( iT > pid_max )
-					iT = pid_max; //Salida integral si es mayor que el MAX
-				else if ( iT < pid_min )
-					iT = pid_min; //Salida integral si es menor que el MIN
+					iT = b * ( eT + eT0 ) + iT0; //Cálculo del término integral corriente
 
-				dT = -c * ( yT - yT0 );	//Cálculo del término derivativo corriente
-				uT = iT + a * eT + dT; //Cálculo de la salida PID corriente
+					/*Limite termino integral corriente*/
+					if ( iT > pid_max )
+						iT = pid_max; //Salida integral si es mayor que el MAX
+					else if ( iT < pid_min )
+						iT = pid_min; //Salida integral si es menor que el MIN
 
-				/*Limite PID corriente*/
-				if ( uT > pid_max )
-					uT = pid_max;           //Salida PID si es mayor que el MAX
-				else if ( uT < pid_min )
-					uT = pid_min;      //Salida PID si es menor que el MIN
+					dT = -c * ( yT - yT0 );	//Cálculo del término derivativo corriente
+					uT = iT + a * eT + dT; //Cálculo de la salida PID corriente
 
-				/* Guardar variables */
-				iT0 = iT;
-				eT0 = eT;
-				yT0 = yT;
+					/*Limite PID corriente*/
+					if ( uT > pid_max )
+						uT = pid_max;           //Salida PID si es mayor que el MAX
+					else if ( uT < pid_min )
+						uT = pid_min;      //Salida PID si es menor que el MIN
 
-				DAC_set(uT);
-				//DAC_set(400);
+					/* Guardar variables */
+					iT0 = iT;
+					eT0 = eT;
+					yT0 = yT;
 
+					DAC_set(uT);
+					//DAC_set(400);
+				}
+				else
+					eT0 = eT;
 			}
 			else
 				DAC_set(0);
