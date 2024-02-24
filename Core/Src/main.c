@@ -82,15 +82,13 @@ typedef struct{
 #define MASK_DAC_READ 0b00001111
 
 // Definiciones PID
-#define PID_A 0.25
-#define PID_B 0.02
-#define PID_C 0
+#define PID_A 0.05
+#define PID_B 0.005
+#define PID_C 0.1
 #define PID_MAX 3000
 #define PID_MIN 0
 #define PID_SETPOINT 0.0
 
-//Definiciones signals
-#define signal_cargaON		0x01
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -278,8 +276,8 @@ int main(void)
   comunicacionHandle = osThreadCreate(osThread(comunicacion), NULL);
 
   /* definition and creation of pid_task */
-//  osThreadDef(pid_task, pid_control, osPriorityAboveNormal, 0, 128);
-//  pid_taskHandle = osThreadCreate(osThread(pid_task), NULL);
+  osThreadDef(pid_task, pid_control, osPriorityAboveNormal, 0, 128);
+  pid_taskHandle = osThreadCreate(osThread(pid_task), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
 //  /* add threads, ... */
@@ -769,8 +767,8 @@ void StartDefaultTask(void const * argument)
 	CARGAPresente.flagTrigger = 0;
 
 	/* definition and creation of defaultTask */
-	osThreadDef(ethTask, eth_task, osPriorityNormal, 0, 2048);
-	ethTask = osThreadCreate(osThread(ethTask), NULL);//ME GUSTARIA QUE FUERA UN PUNTERO
+//	osThreadDef(ethTask, eth_task, osPriorityNormal, 0, 2048);
+//	ethTask = osThreadCreate(osThread(ethTask), NULL);//ME GUSTARIA QUE FUERA UN PUNTERO
 
 	/* Inicializo DAC */
 	DAC_init();
@@ -941,7 +939,7 @@ void medicion_variables(void const * argument)
   {
 
 	  /* Medicion de Corriente con filtro EMA */
-	  current = current_ant * (1 - 0.4) + 0.4 * ADC_read_current(&hi2c1);
+	  current = current_ant * (1 - 0.8) + 0.8 * ADC_read_current(&hi2c1);
 	  current_ant = current;
 
 	  /* Medicion de Tension con filtro EMA*/
@@ -1003,7 +1001,7 @@ void medicion_variables(void const * argument)
 	  }
 	  // Envio las mediciones a tarea pid
 
-	  evt = osSignalWait(0x01, 1);
+	  evt = osSignalWait(0x01, 0);
 	  if( evt.status == osEventSignal){
 		  cargaMediciones = osPoolAlloc(mpoolMediciones_pid);
 		  if ( cargaMediciones != NULL ){
@@ -1026,7 +1024,7 @@ void medicion_variables(void const * argument)
 //	  }
 
 	  // Bloqueo la tarea 5ms * 10 veces = 50mS
-	  osDelayUntil(&previosWakeTime, 5);
+	  osDelayUntil(&previosWakeTime, 15);
 	  HAL_GPIO_TogglePin(prueba_GPIO_Port, prueba_Pin);
   }
 
@@ -1137,6 +1135,8 @@ void pid_control(void const * argument)
 	float rT,eT,iT,dT,yT,yT0,uT,iT0,eT0;   	//variables de ecuaciones de PID voltaje
 	float pid_max,pid_min;             		//límites máximo y mínimo de control.
 
+	float max=0,min=30000;
+
 	osEvent evt;
 
 	uint32_t previosWakeTime = osKernelSysTick();
@@ -1189,6 +1189,11 @@ void pid_control(void const * argument)
 				yT = p_mediciones->corriente; //Señal de corriente
 				// Liberar memoria asignada para el mensaje
 				osPoolFree(mpoolMediciones_pid, p_mediciones);
+				if(yT > max)
+					max = yT;
+
+				if(yT < min && yT >= 0)
+					min = yT;
 			}
 
 			//Hago las tareas del pid
@@ -1220,10 +1225,11 @@ void pid_control(void const * argument)
 				yT0 = yT;
 
 				DAC_set(uT);
+				//DAC_set(100);
 			}
 
 			//Bloqueo la tarea 5mS
-			osDelayUntil(&previosWakeTime, 5);
+			osDelayUntil(&previosWakeTime, 15);
 		}
 		else
 			osDelay(70);

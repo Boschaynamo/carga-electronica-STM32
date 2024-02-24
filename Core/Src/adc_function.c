@@ -19,6 +19,7 @@
 #include "adc_function.h"
 #include "string.h"
 #include "main.h"
+#include "cmsis_os.h"
 
 #ifdef ADC_HW
 	#if ADC_HW == ADS1115
@@ -98,7 +99,7 @@ static void ADC_set (I2C_HandleTypeDef *hi2c, enum input_to_measure entrada){
 
 	buffer[0] = (uint8_t)CONVERSION_REGISTER;
 	HAL_I2C_Master_Transmit(hi2c, ADC_ADDR, buffer, 1, HAL_MAX_DELAY);
-	osDelay(2);
+	osDelay(7);
 }
 
 void ADC_set_rdypin(I2C_HandleTypeDef *hi2c){
