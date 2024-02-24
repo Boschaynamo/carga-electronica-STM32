@@ -987,7 +987,7 @@ void medicion_variables(void const * argument)
   float potencia_gui = 0, potencia_gui_ant = 0;
 
   /* Para poner a punto escalas y offset - Comentar si esta calibrado  */
-  //float promedio = 0, c_mediciones=0;
+  //float promedio = 1, c_mediciones=0;
   //HAL_GPIO_WritePin(VSCALE_GPIO_Port, VSCALE_Pin, GPIO_PIN_SET);//Rango 16V
   //HAL_GPIO_WritePin(VSCALE_GPIO_Port, VSCALE_Pin, GPIO_PIN_RESET);//Rango 160V
 
@@ -1009,13 +1009,13 @@ void medicion_variables(void const * argument)
   /* Infinite loop */
   for (;;)
   {
-
 	  /* Medicion de Corriente con filtro EMA */
 	  current = current_ant * (1 - 0.8) + 0.8 * ADC_read_current(&hi2c1);
 	  current_ant = current;
-	  current_gui = current_gui_ant * (1-0.2) + 0.2 * current;
+	  current_gui = current_gui_ant * (1-1) + 1 * current;
 	  current_gui_ant = current_gui;
-
+	  //promedio += current;
+	  //c_mediciones++;
 	  /* Medicion de Tension con filtro EMA*/
 	  tension = tension_ant * (1 - 0.8) + 0.8 * ADC_read_tension(&hi2c1, rango);
 	  tension_ant = tension;
@@ -1070,7 +1070,7 @@ void medicion_variables(void const * argument)
 	  }
 
 	  // Envio las mediciones tasa 10Hz.
-	  if( i++ == 6){
+	  if( i++ == 3){
 		  cargaMediciones_lenta = osPoolAlloc(mpoolMediciones);
 		  if ( cargaMediciones_lenta != NULL ){
 			  // Guardo los valores de las variables a enviar.
@@ -1090,7 +1090,7 @@ void medicion_variables(void const * argument)
 			  cargaMediciones->corriente = current;
 			  cargaMediciones->tension = tension;
 			  cargaMediciones->potencia = potencia;
-			  osMessagePut(colaMediciones_pid, (uint32_t)cargaMediciones, 5);
+			  osMessagePut(colaMediciones_pid, (uint32_t)cargaMediciones, 2);
 		  }
 		  cargaMediciones = NULL;
 	  }
@@ -1102,12 +1102,12 @@ void medicion_variables(void const * argument)
 			  cargaMediciones->corriente = current_gui;
 			  cargaMediciones->tension = tension_gui;
 			  cargaMediciones->potencia = potencia_gui;
-			  osMessagePut(colaMediciones_eth, (uint32_t)cargaMediciones, 5);
+			  osMessagePut(colaMediciones_eth, (uint32_t)cargaMediciones, 2);
 		  }
 		  cargaMediciones = NULL;
 	  }
 
-	  // Bloqueo la tarea 5ms * 10 veces = 50mS
+	  // Bloqueo la tarea 15ms * 10 veces = 50mS
 	  osDelayUntil(&previosWakeTime, 15);
 	  HAL_GPIO_TogglePin(prueba_GPIO_Port, prueba_Pin);
   }
@@ -1316,6 +1316,7 @@ void pid_control(void const * argument)
 				yT0 = yT;
 
 				DAC_set(uT);
+				//DAC_set(400);
 
 			}
 			else

@@ -42,16 +42,20 @@ static void ADC_set (I2C_HandleTypeDef *hi2c, enum input_to_measure entrada);
 
 float ADC_read_tension (I2C_HandleTypeDef *hi2c, bool rango){
 
-	uint8_t buffer[2];
-	int16_t buffer16;
+	uint8_t buffer[2] = {0,0};
+	int16_t buffer16 = 0;
 
 	ADC_set(hi2c, tension);
+	osDelay(3);//DR_475 ->3mS
+
+	buffer[0] = (uint8_t)CONVERSION_REGISTER;
+	HAL_I2C_Master_Transmit(hi2c, ADC_ADDR, buffer, 1, HAL_MAX_DELAY);
+	buffer[0] = 0;
 
 	// Espero que la conversion este lista - verificando pin ready
 	while (HAL_GPIO_ReadPin(ADC_RDY_GPIO_Port, ADC_RDY_Pin)){
 	}
 	HAL_I2C_Master_Receive(hi2c, ADC_ADDR, buffer, 2, HAL_MAX_DELAY);
-
 	buffer16 = buffer[0] << 8 | buffer[1];
 
 	//Devuelvo en mV el valor de tension medido segun la escala en la que se encuentre
@@ -61,10 +65,15 @@ float ADC_read_tension (I2C_HandleTypeDef *hi2c, bool rango){
 
 float ADC_read_current (I2C_HandleTypeDef *hi2c){
 
-	uint8_t buffer[2];
-	int16_t buffer16;
+	uint8_t buffer[2] = {0,0};
+	int16_t buffer16 = 0;
 
 	ADC_set(hi2c, corriente);
+	osDelay(8);//DR_125 ->8mS
+
+	buffer[0] = (uint8_t)CONVERSION_REGISTER;
+	HAL_I2C_Master_Transmit(hi2c, ADC_ADDR, buffer, 1, HAL_MAX_DELAY);
+	buffer[0] = 0;
 
 	// Espero que la conversion este lista - verificando pin ready
 	while (HAL_GPIO_ReadPin(ADC_RDY_GPIO_Port, ADC_RDY_Pin)){
@@ -88,7 +97,7 @@ static void ADC_set (I2C_HandleTypeDef *hi2c, enum input_to_measure entrada){
 		buffer16 = GET_CONFIG_REGISTER(ADC_OS,AIN_VOLTAGE,FSR_4096,ADC_MODE,ADC_SPS,ADC_COMP_MODE,ADC_COMP_POL,ADC_COMP_LAT,ADC_COMP_QUE);
 	}
 	else if( entrada == corriente ){
-		buffer16 = GET_CONFIG_REGISTER(ADC_OS,AIN_CURRENT,FSR_2048,ADC_MODE,ADC_SPS,ADC_COMP_MODE,ADC_COMP_POL,ADC_COMP_LAT,ADC_COMP_QUE);
+		buffer16 = GET_CONFIG_REGISTER(ADC_OS,AIN_CURRENT,FSR_2048,ADC_MODE,DR_128,ADC_COMP_MODE,ADC_COMP_POL,ADC_COMP_LAT,ADC_COMP_QUE);
 	}
 
 	buffer[1] = (uint8_t)(buffer16 >> 8);
@@ -96,9 +105,6 @@ static void ADC_set (I2C_HandleTypeDef *hi2c, enum input_to_measure entrada){
 
 	HAL_I2C_Master_Transmit(hi2c, ADC_ADDR, buffer, 3, HAL_MAX_DELAY);
 
-	buffer[0] = (uint8_t)CONVERSION_REGISTER;
-	HAL_I2C_Master_Transmit(hi2c, ADC_ADDR, buffer, 1, HAL_MAX_DELAY);
-	osDelay(5);
 }
 
 void ADC_set_rdypin(I2C_HandleTypeDef *hi2c){
