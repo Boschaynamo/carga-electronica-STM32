@@ -107,6 +107,8 @@ RTC_HandleTypeDef hrtc;
 SPI_HandleTypeDef hspi1;
 SPI_HandleTypeDef hspi2;
 
+TIM_HandleTypeDef htim2;
+
 osThreadId defaultTaskHandle;
 osThreadId medicionHandle;
 osThreadId comunicacionHandle;
@@ -160,6 +162,7 @@ static void MX_I2C1_Init(void);
 static void MX_SPI2_Init(void);
 static void MX_RTC_Init(void);
 static void MX_SPI1_Init(void);
+static void MX_TIM2_Init(void);
 void StartDefaultTask(void const * argument);
 void medicion_variables(void const * argument);
 void comunicacion_spi(void const * argument);
@@ -217,6 +220,7 @@ int main(void)
   MX_SPI2_Init();
   MX_RTC_Init();
   MX_SPI1_Init();
+  MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
@@ -272,7 +276,7 @@ int main(void)
   medicionHandle = osThreadCreate(osThread(medicion), NULL);
 
   /* definition and creation of comunicacion */
-  osThreadDef(comunicacion, comunicacion_spi, osPriorityBelowNormal, 0, 256);
+  osThreadDef(comunicacion, comunicacion_spi, osPriorityBelowNormal, 0, 512);
   comunicacionHandle = osThreadCreate(osThread(comunicacion), NULL);
 
   /* definition and creation of pid_task */
@@ -575,6 +579,64 @@ static void MX_SPI2_Init(void)
 }
 
 /**
+  * @brief TIM2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM2_Init(void)
+{
+
+  /* USER CODE BEGIN TIM2_Init 0 */
+
+  /* USER CODE END TIM2_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_OC_InitTypeDef sConfigOC = {0};
+
+  /* USER CODE BEGIN TIM2_Init 1 */
+
+  /* USER CODE END TIM2_Init 1 */
+  htim2.Instance = TIM2;
+  htim2.Init.Prescaler = 0;
+  htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim2.Init.Period = 4294967295;
+  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim2, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_PWM_Init(&htim2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfigOC.OCMode = TIM_OCMODE_PWM1;
+  sConfigOC.Pulse = 0;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+  if (HAL_TIM_PWM_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM2_Init 2 */
+
+  /* USER CODE END TIM2_Init 2 */
+
+}
+
+/**
   * @brief GPIO Initialization Function
   * @param None
   * @retval None
@@ -603,8 +665,8 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_RESET);
 
-  /*Configure GPIO pins : TRIGGER_Pin CONEXT_Pin */
-  GPIO_InitStruct.Pin = TRIGGER_Pin|CONEXT_Pin;
+  /*Configure GPIO pins : TRIGGER_Pin PWM_TENSION_Pin */
+  GPIO_InitStruct.Pin = TRIGGER_Pin|PWM_TENSION_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
@@ -777,13 +839,15 @@ void StartDefaultTask(void const * argument)
 	//Espero 3 segundos que se inicialice GUI
 	osDelay(3000);
 	if(!fecha_act){
-		p_tx = osPoolAlloc(mpool);
-		if( p_tx != NULL ){
-			sprintf(p_tx,"hmU%02d%02d%02d%02d%02d",sTime.Hours,\
-					sTime.Minutes, sDate.Date, sDate.Month, sDate.Year);
+		for (uint8_t i=0; i<2;i++){
+			p_tx = osPoolAlloc(mpool);
+			if( p_tx != NULL ){
+				sprintf(p_tx,"hmU%02d%02d%02d%02d%02d",sTime.Hours,\
+						sTime.Minutes, sDate.Date, sDate.Month, sDate.Year);
 
-			// Envio la cadena a transmitir task comunicacion_spi
-			osMessagePut(colaSPI_TX, (uint32_t)p_tx, osWaitForever);
+				// Envio la cadena a transmitir task comunicacion_spi
+				osMessagePut(colaSPI_TX, (uint32_t)p_tx, osWaitForever);
+			}
 		}
 		fecha_act = true;
 	}
@@ -1274,8 +1338,8 @@ void eth_task(void const * argument)
 
 	  while(1){
 		  //HTTP inicio
-		  for(uint8_t j = 0; j < 4; j++)	httpServer_run(j); 	// HTTP Server handler
-		  osDelay(250);
+		  for(uint8_t j = 0; j < 2; j++)	httpServer_run(j); 	// HTTP Server handler
+		  osDelay(100);
 	  }
   }
   /* USER CODE END eth_task */

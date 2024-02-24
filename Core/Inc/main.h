@@ -59,8 +59,8 @@ void Error_Handler(void);
 /* Private defines -----------------------------------------------------------*/
 #define TRIGGER_Pin GPIO_PIN_13
 #define TRIGGER_GPIO_Port GPIOC
-#define CONEXT_Pin GPIO_PIN_14
-#define CONEXT_GPIO_Port GPIOC
+#define PWM_TENSION_Pin GPIO_PIN_14
+#define PWM_TENSION_GPIO_Port GPIOC
 #define prueba_Pin GPIO_PIN_15
 #define prueba_GPIO_Port GPIOC
 #define ETH_RST_Pin GPIO_PIN_3
