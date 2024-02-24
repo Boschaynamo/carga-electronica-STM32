@@ -1269,9 +1269,13 @@ void pid_control(void const * argument)
 				//Leo el valor de corriente
 				yT = p_mediciones->corriente; //Señal de corriente
 
-				if(modo == m_potencia)
+
+				if(modo == m_potencia){
 					if( p_mediciones->tension > 0)
 						rT = setpoint_potencia * 1000 / p_mediciones->tension;
+					else
+						rT = 0;
+				}
 
 				// Liberar memoria asignada para el mensaje
 				osPoolFree(mpoolMediciones_pid, p_mediciones);
@@ -1306,7 +1310,7 @@ void pid_control(void const * argument)
 				yT0 = yT;
 
 				DAC_set(uT);
-				//DAC_set(100);
+
 			}
 			else
 				DAC_set(0);
