@@ -1272,6 +1272,9 @@ void comunicacion_spi(void const * argument)
 	char *pArrayFromCola;
 	osEvent evt;
 
+	//flag datos pedidos
+	bool flag = false;
+
 	/* Infinite loop */
 	for (;;)
 	{
@@ -1325,11 +1328,45 @@ void comunicacion_spi(void const * argument)
 						HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BIN);
 						HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BIN);
 					}
+
+					//Modo curva encendido
+					if(array_SPI_RX[15] == '1' && flag == false){
+						osDelay(25);
+						HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_RESET);
+						HAL_SPI_TransmitReceive(&hspi2, "hmA1", array_SPI_RX, 21, HAL_MAX_DELAY);
+						HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_SET);
+						flag = true;
+					}
+
+					//Empezaron a llegar los datos de la curva
+					if(array_SPI_RX[2] == 'A'){
+						//le pido los10 puntos
+						char msg_completo[100]= "";
+						char aux[21];
+
+						for(uint8_t i=0; i<21; i++){
+							aux[i] = (char)array_SPI_RX[i];
+						}
+						strcat(msg_completo, aux);
+
+						for(uint8_t contador = 0; contador < 4 ; contador++){
+							osDelay(25);
+							HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_RESET);
+							HAL_SPI_TransmitReceive(&hspi2,"00", array_SPI_RX, 21, HAL_MAX_DELAY);
+							HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_SET);
+							for(uint8_t i=0; i<21; i++){
+								aux[i] = (char)array_SPI_RX[i];
+							}
+							strcat(msg_completo, aux);
+						}
+						flag = false;
+					}
+
 				}
 
 				// Envio los datos analizados task default
 				osMessagePut(colaCARGA, (uint32_t) updateCarga, osWaitForever);
-				osDelay(15);
+				osDelay(25);
 			}
 			// Liberar memoria asignada para el mensaje recibido
 			osPoolFree(mpool, pArrayFromCola);
@@ -1337,7 +1374,7 @@ void comunicacion_spi(void const * argument)
 		}
 	}
 
-  /* USER CODE END comunicacion_spi */
+	/* USER CODE END comunicacion_spi */
 }
 
 /* USER CODE BEGIN Header_pid_control */
