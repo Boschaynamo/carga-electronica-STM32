@@ -1119,7 +1119,7 @@ void medicion_variables(void const * argument)
   //HAL_GPIO_WritePin(VSCALE_GPIO_Port, VSCALE_Pin, GPIO_PIN_RESET);//Rango 160V
 
   // Estructura mediciones
-  MEDICIONES_TypeDef *cargaMediciones, *cargaMediciones_lenta;
+  MEDICIONES_TypeDef *cargaMediciones;
 
   //contador para tarea carga control
   uint8_t i=0;
@@ -1198,13 +1198,13 @@ void medicion_variables(void const * argument)
 
 	  // Envio las mediciones tasa 10Hz.
 	  if( i++ == 3){
-		  cargaMediciones_lenta = osPoolAlloc(mpoolMediciones);
-		  if ( cargaMediciones_lenta != NULL ){
+		  cargaMediciones = osPoolAlloc(mpoolMediciones);
+		  if ( cargaMediciones != NULL ){
 			  // Guardo los valores de las variables a enviar.
-			  cargaMediciones_lenta->corriente = current_gui;
-			  cargaMediciones_lenta->tension = tension_gui;
-			  cargaMediciones_lenta->potencia = potencia_gui;
-			  osMessagePut(colaMediciones, (uint32_t)cargaMediciones_lenta, 0);
+			  cargaMediciones->corriente = current_gui;
+			  cargaMediciones->tension = tension_gui;
+			  cargaMediciones->potencia = potencia_gui;
+			  osMessagePut(colaMediciones, (uint32_t)cargaMediciones, 0);
 		  }
 		  cargaMediciones = NULL;
 		  i = 0;
