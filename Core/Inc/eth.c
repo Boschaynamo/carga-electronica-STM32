@@ -24,6 +24,7 @@
 #include "wizchip_conf.h"
 #include "httpServer/httpServer.h"
 #include "webpage.h"
+#include "cmsis_os.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/

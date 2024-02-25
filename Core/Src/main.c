@@ -24,6 +24,7 @@
 /* USER CODE BEGIN Includes */
 #include "stdio.h"
 #include "stdbool.h"
+#include "stdlib.h"
 #include "string.h"
 #include "adc_function.h"
 
@@ -46,15 +47,31 @@ enum modos_carga
   m_fusible,
   m_bateria
 };
+/* Errores que puede detectar la carga electronica */
+union errores_carga{
+	struct {
+		uint8_t e_polaridadinversa :1;
+		uint8_t e_mosfet:1;
+		uint8_t e_expansion:1;
+		uint8_t e_eth:1;
+		uint8_t e_control:1;
+		uint8_t e_temp:1;
+		uint8_t e_corriente:1;
+		uint8_t e_tension:1;
+		uint8_t e_potencia:1;
+	};
+	uint32_t completo;
+};
 /* Estructura estado modo de la carga electronica */
 /* valor para corriente_constante en mA */
 typedef struct
 {
-  enum modos_carga modo;         /* Modo de trabajo de la carga electronica */
-  uint32_t valorTension;   /* Valor de Tension de la carga electronica */
-  uint32_t valorCorriente; /* Valor de Corriente de la carga electronica */
-  uint32_t valorPotencia;  /* Set point Potencia de la carga electronica */
-  uint32_t setPoint;       /* Set point de la carga electronica */
+  enum modos_carga modo;        /* Modo de trabajo de la carga electronica */
+  union errores_carga error;	/* Errores carga electronica */
+  uint32_t valorTension;   		/* Valor de Tension de la carga electronica */
+  uint32_t valorCorriente; 		/* Valor de Corriente de la carga electronica */
+  uint32_t valorPotencia;  		/* Set point Potencia de la carga electronica */
+  uint32_t setPoint;       		/* Set point de la carga electronica */
   char flagTrigger;
   char flagFecha;
 
@@ -117,19 +134,20 @@ osThreadId Task_ethHandle;
 osSemaphoreId sph_pid_medicionesHandle;
 osSemaphoreId sph_eth_medicionesHandle;
 /* USER CODE BEGIN PV */
-/* Definicion de tarea Ethernet  */
 
-/* Memory pool para comunicacion spi */
+//mpool y cola para transmision de datos a GUI
 osPoolDef(mpool, 5, char[21]); // Define memory pool
 osPoolId mpool;
 osMessageQDef(colaSPI_TX, 5, uint32_t); // Define message queue
 osMessageQId colaSPI_TX;
 
+//mpool y cola para transmision de datos a tarea Carga control
 osPoolDef(mpoolCARGA_Handle, 1, CARGA_HandleTypeDef); // Define memory pool
 osPoolId mpoolCARGA_Handle;
 osMessageQDef(colaCARGA, 1, uint32_t); // Define message queue
 osMessageQId colaCARGA;
 
+//mpool y cola para transmision de mediciones corriente, tension y potencia
 osPoolDef(mpoolMediciones_pid, 5, MEDICIONES_TypeDef); // Define memory pool
 osPoolId mpoolMediciones_pid;
 osPoolDef(mpoolMediciones, 1, MEDICIONES_TypeDef); // Define memory pool
@@ -143,10 +161,15 @@ osMessageQId colaMediciones_pid;
 osMessageQDef(colaMediciones_eth, 1, uint32_t); // Define message queue
 osMessageQId colaMediciones_eth;
 
+//mpool y cola para transmision de setpoint y modo a pid
 osPoolDef(mpoolPID, 1, PID_TypeDef); // Define memory pool
 osPoolId mpoolPID;
 osMessageQDef(colaPID,1,uint32_t); // Define message queue
 osMessageQId colaPID;
+
+//cola para transmision de errores a tarea Carga control
+osMessageQDef(colaErrores,5,uint32_t);// Define message queue
+osMessageQId colaErrores;
 
 // Definiciones para RTC
 RTC_TimeTypeDef sTime;
@@ -264,6 +287,8 @@ int main(void)
 
   mpoolPID = osPoolCreate(osPool(mpoolPID));// create memory pool
   colaPID = osMessageCreate(osMessageQ(colaPID), NULL);// create colaPID queue
+
+  colaErrores = osMessageCreate(osMessageQ(colaErrores), NULL);// Create colaErrores queue
   /* USER CODE END RTOS_QUEUES */
 
   /* Create the thread(s) */
@@ -694,8 +719,8 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pin : EMOS1_Pin */
   GPIO_InitStruct.Pin = EMOS1_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING_FALLING;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   HAL_GPIO_Init(EMOS1_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PB12 */
@@ -705,11 +730,11 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : VINV_Pin */
-  GPIO_InitStruct.Pin = VINV_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  /*Configure GPIO pin : V_INV_Pin */
+  GPIO_InitStruct.Pin = V_INV_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING_FALLING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(VINV_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(V_INV_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : ISCALE_Pin VSCALE_Pin */
   GPIO_InitStruct.Pin = ISCALE_Pin|VSCALE_Pin;
@@ -718,11 +743,27 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
+  /*Configure GPIO pin : BTN_TEST_Pin */
+  GPIO_InitStruct.Pin = BTN_TEST_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING_FALLING;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(BTN_TEST_GPIO_Port, &GPIO_InitStruct);
+
   /*Configure GPIO pin : ADC_RDY_Pin */
   GPIO_InitStruct.Pin = ADC_RDY_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(ADC_RDY_GPIO_Port, &GPIO_InitStruct);
+
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI1_IRQn, 6, 0);
+  HAL_NVIC_EnableIRQ(EXTI1_IRQn);
+
+  HAL_NVIC_SetPriority(EXTI9_5_IRQn, 5, 0);
+  HAL_NVIC_EnableIRQ(EXTI9_5_IRQn);
+
+  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 6, 0);
+  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
@@ -788,6 +829,41 @@ void DAC_set(float setPoint)
   buffer[1] = ((uint16_t)setPoint);
   HAL_I2C_Master_Transmit(&hi2c1, MCP4725_ADDR, buffer, 2, HAL_MAX_DELAY);
 }
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+	union errores_carga error;
+	error.completo = 0;
+
+	/* Interrupcion prueba btn_test */
+	if(GPIO_Pin == BTN_TEST_Pin || GPIO_Pin == V_INV_Pin){
+		if(HAL_GPIO_ReadPin(BTN_TEST_GPIO_Port, BTN_TEST_Pin) == GPIO_PIN_RESET || \
+				HAL_GPIO_ReadPin(V_INV_GPIO_Port, V_INV_Pin) == GPIO_PIN_SET){
+			error.e_polaridadinversa = true;
+			osMessagePut(colaErrores,error.completo, 0);
+		}
+		else{
+			error.e_polaridadinversa = true;
+			osMessagePut(colaErrores,error.completo, 0);
+		}
+	} else {
+		__NOP();
+	}
+
+	/* Interrupcion error mosfet */
+	if(GPIO_Pin == EMOS1_Pin){
+		if(HAL_GPIO_ReadPin(EMOS1_GPIO_Port, EMOS1_Pin) == GPIO_PIN_SET){
+			error.e_mosfet = true;
+			osMessagePut(colaErrores,error.completo, 0);
+		}
+		else{
+			error.e_mosfet = true;
+			osMessagePut(colaErrores,error.completo, 0);
+		}
+	} else {
+		__NOP();
+	}
+}
 /* USER CODE END 4 */
 
 /* USER CODE BEGIN Header_StartDefaultTask */
@@ -803,7 +879,7 @@ void StartDefaultTask(void const * argument)
 	//osDelayUntil
 	uint32_t previosWakeTime = osKernelSysTick();
 
-	uint32_t max = 0, min = 30000;
+	uint8_t c_error = 0;
 
 	// Variables
 	static CARGA_HandleTypeDef CARGAPresente;
@@ -824,7 +900,8 @@ void StartDefaultTask(void const * argument)
 	uint32_t referencia = 0;
 
 	// Inicializo variable carga electronica
-	CARGAPresente.modo =  m_apagado;
+	CARGAPresente.modo = m_apagado;
+	CARGAPresente.error.completo = 0;
 	CARGAPresente.setPoint = 0;
 	CARGAPresente.valorCorriente = 0;
 	CARGAPresente.valorTension = 0;
@@ -839,14 +916,14 @@ void StartDefaultTask(void const * argument)
 	//Espero 3 segundos que se inicialice GUI
 	osDelay(3000);
 	if(!fecha_act){
-		for (uint8_t i=0; i<2;i++){
+		for (uint8_t i=0; i<3;i++){
 			p_tx = osPoolAlloc(mpool);
 			if( p_tx != NULL ){
 				sprintf(p_tx,"hmU%02d%02d%02d%02d%02d",sTime.Hours,\
 						sTime.Minutes, sDate.Date, sDate.Month, sDate.Year);
 
 				// Envio la cadena a transmitir task comunicacion_spi
-				osMessagePut(colaSPI_TX, (uint32_t)p_tx, osWaitForever);
+				osMessagePut(colaSPI_TX, (uint32_t)p_tx, 50);
 			}
 			p_tx = NULL;
 		}
@@ -867,12 +944,6 @@ void StartDefaultTask(void const * argument)
 			CARGAPresente.valorPotencia = (uint32_t)p_mediciones->potencia;
 			// Liberar memoria asignada para el mensaje
 			osPoolFree(mpoolMediciones, p_mediciones);
-
-			if(CARGAPresente.valorCorriente > max)
-				max = CARGAPresente.valorCorriente;
-
-			if(CARGAPresente.valorCorriente < min && CARGAPresente.valorCorriente >= 0)
-				min = CARGAPresente.valorCorriente;
 
 		}else if(evt.status == osEventTimeout){
 			//Error en la tasa de muestreo de la medicion
@@ -898,12 +969,26 @@ void StartDefaultTask(void const * argument)
 			//Recibi el msj de la GUI
 			CARGAUpdate = evt.value.p;
 
-			//Interpreto si hubo un cambio de modo
-			if(CARGAPresente.modo != CARGAUpdate->modo){
-				CARGAPresente.modo = CARGAUpdate->modo;
+			//Interpreto los modos
+			if(CARGAUpdate->modo == m_apagado || \
+					CARGAUpdate->modo == m_corriente_off ||\
+					CARGAUpdate->modo == m_potenica_off  ||\
+					CARGAUpdate->modo == m_tension_off){
+				//Si el modo en GUI es apagado
+				c_error = 0;//Reseteo contador error control
+				CARGAPresente.error.e_control = 0;//Reseteo error control
 			}
-			//Cargo el nuevo valor del setpoint
-			CARGAPresente.setPoint = CARGAUpdate->setPoint;
+			else if(CARGAPresente.modo != CARGAUpdate->modo && !CARGAPresente.error.completo){
+				//Si los modos son distintos y no hay error
+				CARGAPresente.modo = CARGAUpdate->modo;//Cambio de modo
+				c_error = 0;//Reseteo contador error control
+			}
+			//Setpint
+			if(CARGAPresente.setPoint != CARGAUpdate->setPoint){
+				//Si cambio el setpoint
+				CARGAPresente.setPoint = CARGAUpdate->setPoint;
+				c_error = 0;//Reseteo contador error control
+			}
 
 			//Libero el msj de la memoria
 			osPoolFree(mpoolCARGA_Handle, CARGAUpdate);
@@ -911,6 +996,30 @@ void StartDefaultTask(void const * argument)
 		}
 		else if(evt.status == osEventTimeout){
 			//No recibi msj de la GUI en 200mS
+		}
+
+		//Leo cola errores
+		evt = osMessageGet(colaErrores, 0);
+		if(evt.status == osEventMessage){
+			CARGAPresente.error.completo ^= (uint32_t)evt.value.v;
+		}
+
+		//Si hay errores apago la carga y envio a GUI
+		if(CARGAPresente.error.completo != 0){
+			CARGAPresente.modo = m_apagado;//Apago la carga
+			HAL_GPIO_WritePin(prueba_GPIO_Port, prueba_Pin, GPIO_PIN_SET);
+			// Envio error actual de la carga a la GUI
+			p_tx = osPoolAlloc(mpool);
+			if( p_tx != NULL ){
+
+				// Carga la cadena a transmitir
+				sprintf(p_tx,"hmE%02lu",(uint32_t)CARGAPresente.error.completo);
+
+				// Envio la cadena a transmitir task comunicacion_spi
+				osMessagePut(colaSPI_TX, (uint32_t)p_tx, 25);
+			}
+		}else{
+			HAL_GPIO_WritePin(prueba_GPIO_Port, prueba_Pin, GPIO_PIN_RESET);
 		}
 
 		/* Controlo la carga electronica */
@@ -930,7 +1039,16 @@ void StartDefaultTask(void const * argument)
 			/* Modo corriente constante */
 			if(CARGAPresente.setPoint > 30000)
 				CARGAPresente.setPoint = 0;
-			referencia= CARGAPresente.setPoint;
+			referencia = CARGAPresente.setPoint;
+			//Si esta lejos del setpint
+			if(abs(CARGAPresente.setPoint - CARGAPresente.valorCorriente) > 15){
+				if(++c_error > 20){//Durante un segundo no pudo llegar al setpoint
+					CARGAPresente.error.e_control = true;
+					referencia = 0;
+				}
+			}
+			else
+				c_error = 0;
 			break;
 
 		case m_potencia:
@@ -938,6 +1056,15 @@ void StartDefaultTask(void const * argument)
 			if( CARGAPresente.setPoint > 500000)
 				CARGAPresente.setPoint =  0;
 			referencia = CARGAPresente.setPoint;
+			//Si esta lejos del setpoint
+			if(abs(CARGAPresente.setPoint - CARGAPresente.valorPotencia) > 100){
+				if(++c_error > 20){//Durante un segundo no pudo llegar al setpoint
+					CARGAPresente.error.e_control = true;
+					referencia = 0;
+				}
+			}
+			else
+				c_error = 0;
 			break;
 
 		case m_tension:
@@ -1012,7 +1139,7 @@ void medicion_variables(void const * argument)
 	  /* Medicion de Corriente con filtro EMA */
 	  current = current_ant * (1 - 0.8) + 0.8 * ADC_read_current(&hi2c1);
 	  current_ant = current;
-	  current_gui = current_gui_ant * (1-1) + 1 * current;
+	  current_gui = current_gui_ant * (1-0.8) + 0.8 * current;
 	  current_gui_ant = current_gui;
 	  //promedio += current;
 	  //c_mediciones++;
@@ -1109,7 +1236,7 @@ void medicion_variables(void const * argument)
 
 	  // Bloqueo la tarea 15ms * 10 veces = 50mS
 	  osDelayUntil(&previosWakeTime, 15);
-	  HAL_GPIO_TogglePin(prueba_GPIO_Port, prueba_Pin);
+	  //HAL_GPIO_TogglePin(prueba_GPIO_Port, prueba_Pin);
   }
 
 
