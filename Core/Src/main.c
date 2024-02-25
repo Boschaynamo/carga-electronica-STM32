@@ -142,9 +142,9 @@ osMessageQDef(colaSPI_TX, 5, uint32_t); // Define message queue
 osMessageQId colaSPI_TX;
 
 //mpool y cola para transmision de datos a tarea Carga control
-osPoolDef(mpoolCARGA_Handle, 1, CARGA_HandleTypeDef); // Define memory pool
+osPoolDef(mpoolCARGA_Handle, 5, CARGA_HandleTypeDef); // Define memory pool
 osPoolId mpoolCARGA_Handle;
-osMessageQDef(colaCARGA, 1, uint32_t); // Define message queue
+osMessageQDef(colaCARGA, 5, uint32_t); // Define message queue
 osMessageQId colaCARGA;
 
 //mpool y cola para transmision de mediciones corriente, tension y potencia
@@ -978,7 +978,7 @@ void StartDefaultTask(void const * argument)
 				c_error = 0;//Reseteo contador error control
 				CARGAPresente.error.e_control = 0;//Reseteo error control
 			}
-			else if(CARGAPresente.modo != CARGAUpdate->modo && !CARGAPresente.error.completo){
+			if(CARGAPresente.modo != CARGAUpdate->modo && !CARGAPresente.error.completo){
 				//Si los modos son distintos y no hay error
 				CARGAPresente.modo = CARGAUpdate->modo;//Cambio de modo
 				c_error = 0;//Reseteo contador error control
@@ -1001,7 +1001,14 @@ void StartDefaultTask(void const * argument)
 		//Leo cola errores
 		evt = osMessageGet(colaErrores, 0);
 		if(evt.status == osEventMessage){
-			CARGAPresente.error.completo ^= (uint32_t)evt.value.v;
+			CARGAPresente.error.completo |= (uint32_t)evt.value.v;
+			osDelay(1);
+			//Error mosfet
+			if(CARGAPresente.error.e_mosfet == true)
+				CARGAPresente.error.e_mosfet = HAL_GPIO_ReadPin(EMOS1_GPIO_Port, EMOS1_Pin);
+			//Error tension inversa
+			if(CARGAPresente.error.e_polaridadinversa == true)
+				CARGAPresente.error.e_polaridadinversa = HAL_GPIO_ReadPin(V_INV_GPIO_Port, V_INV_Pin);
 		}
 
 		//Si hay errores apago la carga y envio a GUI
@@ -1016,7 +1023,7 @@ void StartDefaultTask(void const * argument)
 				sprintf(p_tx,"hmE%02lu",(uint32_t)CARGAPresente.error.completo);
 
 				// Envio la cadena a transmitir task comunicacion_spi
-				osMessagePut(colaSPI_TX, (uint32_t)p_tx, 25);
+				osMessagePut(colaSPI_TX, (uint32_t)p_tx, osWaitForever);
 			}
 		}else{
 			HAL_GPIO_WritePin(prueba_GPIO_Port, prueba_Pin, GPIO_PIN_RESET);
@@ -1041,7 +1048,7 @@ void StartDefaultTask(void const * argument)
 				CARGAPresente.setPoint = 0;
 			referencia = CARGAPresente.setPoint;
 			//Si esta lejos del setpint
-			if(abs(CARGAPresente.setPoint - CARGAPresente.valorCorriente) > 15){
+			if(abs(CARGAPresente.setPoint - CARGAPresente.valorCorriente) > 25){
 				if(++c_error > 20){//Durante un segundo no pudo llegar al setpoint
 					CARGAPresente.error.e_control = true;
 					referencia = 0;
