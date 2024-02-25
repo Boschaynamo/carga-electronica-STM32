@@ -1329,6 +1329,7 @@ void comunicacion_spi(void const * argument)
 
 				// Envio los datos analizados task default
 				osMessagePut(colaCARGA, (uint32_t) updateCarga, osWaitForever);
+				osDelay(15);
 			}
 			// Liberar memoria asignada para el mensaje recibido
 			osPoolFree(mpool, pArrayFromCola);
