@@ -1003,7 +1003,10 @@ void StartDefaultTask(void const * argument)
 			//Modo seteado en GUI
 			if(CARGAPresente.modo != CARGAUpdate->modo && !CARGAPresente.error.completo){
 				//Si los modos son distintos y no hay error
-				CARGAPresente.modo = CARGAUpdate->modo;//Cambio de modo
+				if(CARGAUpdate->modo == m_corriente_curva_on && flag_ctrl_curva == true)
+					CARGAPresente.modo = m_apagado;
+				else
+					CARGAPresente.modo = CARGAUpdate->modo;//Cambio de modo
 				c_error = 0;//Reseteo contador error control
 				//Si apagaron la carga reseteo flag curva
 			}
@@ -1057,13 +1060,14 @@ void StartDefaultTask(void const * argument)
 		/* Controlo la carga electronica */
 		switch(CARGAPresente.modo){
 		/* Apago la carga */
+		case  m_corriente_curva_off:
+			flag_ctrl_curva = false;
 		case m_apagado:
 		case m_corriente_off:
 		case m_tension_off:
-		case  m_corriente_curva_off:
 			DAC_set(0);
 			referencia = 0;
-			flag_ctrl_curva = false;
+
 			break;
 
 		case m_corriente_on:
@@ -1633,14 +1637,14 @@ void cb_control_curva(void const * argument)
 				//Guardo el valor de referencia y modo a enviar
 				p_pid->modo = m_corriente_off;
 				p_pid->referencia = 0;
-				osMessagePut(colaPID, (uint32_t)p_pid, 50);
+				osMessagePut(colaPID, (uint32_t)p_pid, osWaitForever);
 			}
 
 			//Cuadno termino apago la carga
 			// Reservo un espacio de memoria para asignar los datos recibidos
 			updateCarga = osPoolAlloc(mpoolCARGA_Handle);
 			if(updateCarga != NULL){
-				updateCarga->modo = m_corriente_curva_off;
+				updateCarga->modo = m_apagado;
 
 				osMessagePut(colaCARGA, (uint32_t)updateCarga, osWaitForever);
 			}
