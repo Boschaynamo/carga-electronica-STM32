@@ -420,7 +420,7 @@ static void MX_ADC1_Init(void)
   hadc1.Instance = ADC1;
   hadc1.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
   hadc1.Init.Resolution = ADC_RESOLUTION_12B;
-  hadc1.Init.ScanConvMode = DISABLE;
+  hadc1.Init.ScanConvMode = ENABLE;
   hadc1.Init.ContinuousConvMode = ENABLE;
   hadc1.Init.DiscontinuousConvMode = DISABLE;
   hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
@@ -973,6 +973,22 @@ void StartDefaultTask(void const * argument)
 
 		}else if(evt.status == osEventTimeout){
 			//Error en la tasa de muestreo de la medicion
+		}
+
+		//Leo adc temperatura disipador y la envio cada 1segundo
+		HAL_ADC_Start(&hadc1);
+		CARGAPresente.temperatura = HAL_ADC_GetValue(&hadc1) * 3300 /4096 /10;
+		if(c_temp++ == 10){
+			p_tx = osPoolAlloc(mpool);
+			if( p_tx != NULL ){
+
+				// Carga la cadena a transmitir
+				sprintf(p_tx,"hmR%03lu",(uint32_t)CARGAPresente.temperatura);
+
+				// Envio la cadena a transmitir task comunicacion_spi
+				osMessagePut(colaSPI_TX, (uint32_t)p_tx, 25);
+			}
+			c_temp = 0;//Reseteo flag
 		}
 
 

@@ -1,6 +1,7 @@
 #MicroXplorer Configuration settings - do not modify
 ADC1.Channel-0\#ChannelRegularConversion=ADC_CHANNEL_8
-ADC1.IPParameters=Rank-0\#ChannelRegularConversion,master,Channel-0\#ChannelRegularConversion,SamplingTime-0\#ChannelRegularConversion,NbrOfConversionFlag
+ADC1.ContinuousConvMode=ENABLE
+ADC1.IPParameters=Rank-0\#ChannelRegularConversion,master,Channel-0\#ChannelRegularConversion,SamplingTime-0\#ChannelRegularConversion,NbrOfConversionFlag,ContinuousConvMode
 ADC1.NbrOfConversionFlag=1
 ADC1.Rank-0\#ChannelRegularConversion=1
 ADC1.SamplingTime-0\#ChannelRegularConversion=ADC_SAMPLETIME_3CYCLES
@@ -12,7 +13,7 @@ FREERTOS.BinarySemaphores01=sph_pid_mediciones,Dynamic,NULL;sph_eth_mediciones,D
 FREERTOS.FootprintOK=true
 FREERTOS.INCLUDE_vTaskDelayUntil=1
 FREERTOS.IPParameters=Tasks01,FootprintOK,configTOTAL_HEAP_SIZE,BinarySemaphores01,configUSE_IDLE_HOOK,configCHECK_FOR_STACK_OVERFLOW,INCLUDE_vTaskDelayUntil
-FREERTOS.Tasks01=defaultTask,0,256,StartDefaultTask,Default,NULL,Dynamic,NULL,NULL;medicion,1,256,medicion_variables,Default,NULL,Dynamic,NULL,NULL;comunicacion,-1,512,comunicacion_spi,Default,NULL,Dynamic,NULL,NULL;pid_task,1,128,pid_control,Default,NULL,Dynamic,NULL,NULL;Task_eth,0,2048,eth_task,Default,NULL,Dynamic,NULL,NULL;control_curva,2,128,cb_control_curva,Default,NULL,Dynamic,NULL,NULL
+FREERTOS.Tasks01=defaultTask,0,256,StartDefaultTask,Default,NULL,Dynamic,NULL,NULL;medicion,1,256,medicion_variables,Default,NULL,Dynamic,NULL,NULL;comunicacion,-1,512,comunicacion_spi,Default,NULL,Dynamic,NULL,NULL;pid_task,1,256,pid_control,Default,NULL,Dynamic,NULL,NULL;Task_eth,0,4096,eth_task,Default,NULL,Dynamic,NULL,NULL;control_curva,2,256,cb_control_curva,Default,NULL,Dynamic,NULL,NULL
 FREERTOS.configCHECK_FOR_STACK_OVERFLOW=0
 FREERTOS.configTOTAL_HEAP_SIZE=32768
 FREERTOS.configUSE_IDLE_HOOK=0
