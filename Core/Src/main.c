@@ -73,6 +73,7 @@ typedef struct
   uint32_t setPoint;       		/* Set point de la carga electronica */
   char flagTrigger;
   char flagFecha;
+  uint32_t temperatura;
 
 } CARGA_HandleTypeDef;
 
@@ -420,7 +421,7 @@ static void MX_ADC1_Init(void)
   hadc1.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
   hadc1.Init.Resolution = ADC_RESOLUTION_12B;
   hadc1.Init.ScanConvMode = DISABLE;
-  hadc1.Init.ContinuousConvMode = DISABLE;
+  hadc1.Init.ContinuousConvMode = ENABLE;
   hadc1.Init.DiscontinuousConvMode = DISABLE;
   hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
   hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
@@ -897,7 +898,7 @@ void StartDefaultTask(void const * argument)
 	//osDelayUntil
 	uint32_t previosWakeTime = osKernelSysTick();
 
-	uint8_t c_error = 0;
+	uint8_t c_error = 0, c_temp = 0;
 
 	// Variables
 	static CARGA_HandleTypeDef CARGAPresente;
@@ -929,9 +930,13 @@ void StartDefaultTask(void const * argument)
 	CARGAPresente.valorPotencia = 0;
 	CARGAPresente.flagFecha = 0;
 	CARGAPresente.flagTrigger = 0;
+	CARGAPresente.temperatura = 0;
 
 	/* Inicializo DAC */
 	DAC_init();
+
+	/* Inicializo ADC */
+	HAL_ADC_Start(&hadc1);
 
 	/* Inicializo Fecha en GUI */
 	//Espero 3 segundos que se inicialice GUI
@@ -970,6 +975,7 @@ void StartDefaultTask(void const * argument)
 			//Error en la tasa de muestreo de la medicion
 		}
 
+
 		// Envio estado actual de la carga a la GUI
 		p_tx = osPoolAlloc(mpool);
 		if( p_tx != NULL ){
@@ -985,45 +991,47 @@ void StartDefaultTask(void const * argument)
 		}
 
 		//Recibo msj de la GUI
-		evt = osMessageGet(colaCARGA, 40);
-		if(evt.status == osEventMessage){
-			//Recibi el msj de la GUI
-			CARGAUpdate = evt.value.p;
+		while(osMessageAvailableSpace(colaCARGA) < 4){
+			evt = osMessageGet(colaCARGA, 40);
+			if(evt.status == osEventMessage){
+				//Recibi el msj de la GUI
+				CARGAUpdate = evt.value.p;
 
-			//Interpreto los modos
-			if(CARGAUpdate->modo == m_apagado || \
-					CARGAUpdate->modo == m_corriente_off ||\
-					CARGAUpdate->modo == m_potencia_off  ||\
-					CARGAUpdate->modo == m_tension_off   ||\
-					CARGAUpdate->modo == m_corriente_curva_off){
-				//Si el modo en GUI es apagado
-				c_error = 0;//Reseteo contador error control
-				CARGAPresente.error.e_control = 0;//Reseteo error control
-			}
-			//Modo seteado en GUI
-			if(CARGAPresente.modo != CARGAUpdate->modo && !CARGAPresente.error.completo){
-				//Si los modos son distintos y no hay error
-				if(CARGAUpdate->modo == m_corriente_curva_on && flag_ctrl_curva == true)
-					CARGAPresente.modo = m_apagado;
-				else
-					CARGAPresente.modo = CARGAUpdate->modo;//Cambio de modo
-				c_error = 0;//Reseteo contador error control
-				//Si apagaron la carga reseteo flag curva
-			}
-			//Setpoint en GUI
-			if(CARGAPresente.setPoint != CARGAUpdate->setPoint){
-				//Si cambio el setpoint
-				CARGAPresente.setPoint = CARGAUpdate->setPoint;
-				c_error = 0;//Reseteo contador error control
-			}
+				//Interpreto los modos
+				if(CARGAUpdate->modo == m_apagado || \
+						CARGAUpdate->modo == m_corriente_off ||\
+						CARGAUpdate->modo == m_potencia_off  ||\
+						CARGAUpdate->modo == m_tension_off   ||\
+						CARGAUpdate->modo == m_corriente_curva_off){
+					//Si el modo en GUI es apagado
+					c_error = 0;//Reseteo contador error control
+					CARGAPresente.error.e_control = 0;//Reseteo error control
+				}
+				//Modo seteado en GUI
+				if(CARGAPresente.modo != CARGAUpdate->modo && !CARGAPresente.error.completo){
+					//Si los modos son distintos y no hay error
+					if(CARGAUpdate->modo == m_corriente_curva_on && flag_ctrl_curva == true)
+						CARGAPresente.modo = m_apagado;
+					else
+						CARGAPresente.modo = CARGAUpdate->modo;//Cambio de modo
+					c_error = 0;//Reseteo contador error control
+					//Si apagaron la carga reseteo flag curva
+				}
+				//Setpoint en GUI
+				if(CARGAPresente.setPoint != CARGAUpdate->setPoint){
+					//Si cambio el setpoint
+					CARGAPresente.setPoint = CARGAUpdate->setPoint;
+					c_error = 0;//Reseteo contador error control
+				}
 
 
-			//Libero el msj de la memoria
-			osPoolFree(mpoolCARGA_Handle, CARGAUpdate);
-			CARGAUpdate = NULL;
-		}
-		else if(evt.status == osEventTimeout){
-			//No recibi msj de la GUI en 200mS
+				//Libero el msj de la memoria
+				osPoolFree(mpoolCARGA_Handle, CARGAUpdate);
+				CARGAUpdate = NULL;
+			}
+			else if(evt.status == osEventTimeout){
+				//No recibi msj de la GUI en 200mS
+			}
 		}
 
 		//Leo cola errores
@@ -1644,6 +1652,10 @@ void cb_control_curva(void const * argument)
 			//Cuadno termino apago la carga
 			// Reservo un espacio de memoria para asignar los datos recibidos
 			updateCarga = osPoolAlloc(mpoolCARGA_Handle);
+			while(updateCarga == NULL){
+				osDelay(100);
+				updateCarga = osPoolAlloc(mpoolCARGA_Handle);
+			}
 			if(updateCarga != NULL){
 				updateCarga->modo = m_apagado;
 
