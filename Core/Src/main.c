@@ -1036,7 +1036,8 @@ void StartDefaultTask(void const * argument)
 				CARGAPresente.error.e_mosfet = HAL_GPIO_ReadPin(EMOS1_GPIO_Port, EMOS1_Pin);
 			//Error tension inversa
 			if(CARGAPresente.error.e_polaridadinversa == true)
-				CARGAPresente.error.e_polaridadinversa = HAL_GPIO_ReadPin(V_INV_GPIO_Port, V_INV_Pin);
+				CARGAPresente.error.e_polaridadinversa = HAL_GPIO_ReadPin(V_INV_GPIO_Port, V_INV_Pin) \
+				| !HAL_GPIO_ReadPin(BTN_TEST_GPIO_Port, BTN_TEST_Pin);
 		}
 
 		//Si hay errores apago la carga y envio a GUI
