@@ -35,17 +35,16 @@
 /* Modos funcionamiento carga electronica */
 enum modos_carga
 {
-  m_apagado = 0,
-  m_corriente_off,
-  m_tension_off,
-  m_potenica_off,
-  m_fusible_off,
-  m_bateria_off,
-  m_corriente,
-  m_tension,
-  m_potencia,
-  m_fusible,
-  m_bateria
+    m_apagado = 0,
+    m_corriente_off,
+	m_corriente_on,
+    m_tension_off,
+	m_tension_on,
+    m_potencia_off,
+	m_potencia_on,
+	m_corriente_curva_off,
+	m_corriente_curva_on,
+	m_max
 };
 /* Errores que puede detectar la carga electronica */
 union errores_carga{
@@ -131,8 +130,10 @@ osThreadId medicionHandle;
 osThreadId comunicacionHandle;
 osThreadId pid_taskHandle;
 osThreadId Task_ethHandle;
+osThreadId control_curvaHandle;
 osSemaphoreId sph_pid_medicionesHandle;
 osSemaphoreId sph_eth_medicionesHandle;
+osSemaphoreId sph_ctrl_curvaHandle;
 /* USER CODE BEGIN PV */
 
 //mpool y cola para transmision de datos a GUI
@@ -162,14 +163,20 @@ osMessageQDef(colaMediciones_eth, 1, uint32_t); // Define message queue
 osMessageQId colaMediciones_eth;
 
 //mpool y cola para transmision de setpoint y modo a pid
-osPoolDef(mpoolPID, 1, PID_TypeDef); // Define memory pool
+osPoolDef(mpoolPID, 15, PID_TypeDef); // Define memory pool
 osPoolId mpoolPID;
-osMessageQDef(colaPID,1,uint32_t); // Define message queue
+osMessageQDef(colaPID,15,uint32_t); // Define message queue
 osMessageQId colaPID;
 
 //cola para transmision de errores a tarea Carga control
 osMessageQDef(colaErrores,5,uint32_t);// Define message queue
 osMessageQId colaErrores;
+
+//cola con datos para curva
+osPoolDef(mpoolCurva,1,char[100]);
+osPoolId mpoolCurva;
+osMessageQDef(colaCurva,1,uint32_t);
+osMessageQId colaCurva;
 
 // Definiciones para RTC
 RTC_TimeTypeDef sTime;
@@ -191,6 +198,7 @@ void medicion_variables(void const * argument);
 void comunicacion_spi(void const * argument);
 void pid_control(void const * argument);
 void eth_task(void const * argument);
+void cb_control_curva(void const * argument);
 
 /* USER CODE BEGIN PFP */
 /* Prototipos funciones DAC MCP4725 I2C */
@@ -261,6 +269,10 @@ int main(void)
   osSemaphoreDef(sph_eth_mediciones);
   sph_eth_medicionesHandle = osSemaphoreCreate(osSemaphore(sph_eth_mediciones), 1);
 
+  /* definition and creation of sph_ctrl_curva */
+  osSemaphoreDef(sph_ctrl_curva);
+  sph_ctrl_curvaHandle = osSemaphoreCreate(osSemaphore(sph_ctrl_curva), 1);
+
   /* USER CODE BEGIN RTOS_SEMAPHORES */
   /* add semaphores, ... */
   /* USER CODE END RTOS_SEMAPHORES */
@@ -289,6 +301,9 @@ int main(void)
   colaPID = osMessageCreate(osMessageQ(colaPID), NULL);// create colaPID queue
 
   colaErrores = osMessageCreate(osMessageQ(colaErrores), NULL);// Create colaErrores queue
+
+  mpoolCurva = osPoolCreate(osPool(mpoolCurva)); // create memory pool
+  colaCurva = osMessageCreate(osMessageQ(colaCurva), NULL);
   /* USER CODE END RTOS_QUEUES */
 
   /* Create the thread(s) */
@@ -305,16 +320,19 @@ int main(void)
   comunicacionHandle = osThreadCreate(osThread(comunicacion), NULL);
 
   /* definition and creation of pid_task */
-  osThreadDef(pid_task, pid_control, osPriorityAboveNormal, 0, 128);
+  osThreadDef(pid_task, pid_control, osPriorityAboveNormal, 0, 256);
   pid_taskHandle = osThreadCreate(osThread(pid_task), NULL);
 
   /* definition and creation of Task_eth */
-  osThreadDef(Task_eth, eth_task, osPriorityNormal, 0, 2048);
+  osThreadDef(Task_eth, eth_task, osPriorityNormal, 0, 4096);
   Task_ethHandle = osThreadCreate(osThread(Task_eth), NULL);
 
+  /* definition and creation of control_curva */
+  osThreadDef(control_curva, cb_control_curva, osPriorityHigh, 0, 256);
+  control_curvaHandle = osThreadCreate(osThread(control_curva), NULL);
+
   /* USER CODE BEGIN RTOS_THREADS */
-  osSemaphoreWait(sph_eth_medicionesHandle, osWaitForever);
-  osSemaphoreWait(sph_pid_medicionesHandle, osWaitForever);
+
   /* USER CODE END RTOS_THREADS */
 
   /* Start scheduler */
@@ -889,6 +907,9 @@ void StartDefaultTask(void const * argument)
 	//flag fecha actualizada
 	bool fecha_act = false;
 
+	//flag para enviar solo 1 vez el semaforo
+	bool flag_ctrl_curva = false;
+
 	//Puntero a cadena transmision
 	char *p_tx;
 
@@ -972,23 +993,27 @@ void StartDefaultTask(void const * argument)
 			//Interpreto los modos
 			if(CARGAUpdate->modo == m_apagado || \
 					CARGAUpdate->modo == m_corriente_off ||\
-					CARGAUpdate->modo == m_potenica_off  ||\
-					CARGAUpdate->modo == m_tension_off){
+					CARGAUpdate->modo == m_potencia_off  ||\
+					CARGAUpdate->modo == m_tension_off   ||\
+					CARGAUpdate->modo == m_corriente_curva_off){
 				//Si el modo en GUI es apagado
 				c_error = 0;//Reseteo contador error control
 				CARGAPresente.error.e_control = 0;//Reseteo error control
 			}
+			//Modo seteado en GUI
 			if(CARGAPresente.modo != CARGAUpdate->modo && !CARGAPresente.error.completo){
 				//Si los modos son distintos y no hay error
 				CARGAPresente.modo = CARGAUpdate->modo;//Cambio de modo
 				c_error = 0;//Reseteo contador error control
+				//Si apagaron la carga reseteo flag curva
 			}
-			//Setpint
+			//Setpoint en GUI
 			if(CARGAPresente.setPoint != CARGAUpdate->setPoint){
 				//Si cambio el setpoint
 				CARGAPresente.setPoint = CARGAUpdate->setPoint;
 				c_error = 0;//Reseteo contador error control
 			}
+
 
 			//Libero el msj de la memoria
 			osPoolFree(mpoolCARGA_Handle, CARGAUpdate);
@@ -1033,16 +1058,15 @@ void StartDefaultTask(void const * argument)
 		switch(CARGAPresente.modo){
 		/* Apago la carga */
 		case m_apagado:
-		case m_bateria_off:
 		case m_corriente_off:
-		case m_fusible_off:
-		case m_potenica_off:
 		case m_tension_off:
+		case  m_corriente_curva_off:
 			DAC_set(0);
 			referencia = 0;
+			flag_ctrl_curva = false;
 			break;
 
-		case m_corriente:
+		case m_corriente_on:
 			/* Modo corriente constante */
 			if(CARGAPresente.setPoint > 30000)
 				CARGAPresente.setPoint = 0;
@@ -1058,7 +1082,7 @@ void StartDefaultTask(void const * argument)
 				c_error = 0;
 			break;
 
-		case m_potencia:
+		case m_potencia_on:
 			/* Modo potencia constante */
 			if( CARGAPresente.setPoint > 500000)
 				CARGAPresente.setPoint =  0;
@@ -1074,24 +1098,27 @@ void StartDefaultTask(void const * argument)
 				c_error = 0;
 			break;
 
-		case m_tension:
-			break;
-
-		case m_bateria:
-			break;
-		case m_fusible:
+		case m_corriente_curva_on:
+			if(flag_ctrl_curva == false){
+				osSemaphoreRelease(sph_ctrl_curvaHandle);
+				flag_ctrl_curva = true;
+			}
 			break;
 
 		default:
+			DAC_set(0);
+			referencia = 0;
 		}
 
-		//Reservo espacio para enviar msj a cola PID
-		p_pid = osPoolAlloc(mpoolPID);
-		if( p_pid != NULL){
-			//Guardo el valor de referencia y modo a enviar
-			p_pid->modo = CARGAPresente.modo;
-			p_pid->referencia = referencia;
-			osMessagePut(colaPID, (uint32_t)p_pid, 10);
+		if(CARGAPresente.modo != m_corriente_curva_on){
+			//Reservo espacio para enviar msj a cola PID
+			p_pid = osPoolAlloc(mpoolPID);
+			if( p_pid != NULL){
+				//Guardo el valor de referencia y modo a enviar
+				p_pid->modo = CARGAPresente.modo;
+				p_pid->referencia = referencia;
+				osMessagePut(colaPID, (uint32_t)p_pid, 10);
+			}
 		}
 
 		//Tarea periodica 100mS
@@ -1139,6 +1166,10 @@ void medicion_variables(void const * argument)
   ADC_set_rdypin(&hi2c1);
 
   uint32_t previosWakeTime = osKernelSysTick();
+
+  //Limpio semaforos
+  osSemaphoreWait(sph_eth_medicionesHandle, 0);
+  osSemaphoreWait(sph_pid_medicionesHandle, 0);
 
   /* Infinite loop */
   for (;;)
@@ -1218,7 +1249,7 @@ void medicion_variables(void const * argument)
 	  }
 
 	  // Envio las mediciones a tarea pid
-	  if( osSemaphoreWait(sph_pid_medicionesHandle, 0) > 0){
+	  if( osSemaphoreWait(sph_pid_medicionesHandle, 0) == osOK){
 		  cargaMediciones = osPoolAlloc(mpoolMediciones_pid);
 		  if ( cargaMediciones != NULL ){
 			  cargaMediciones->corriente = current;
@@ -1230,7 +1261,7 @@ void medicion_variables(void const * argument)
 	  }
 
 	  //Envio las mediciones a tarea eth_task
-	  if( osSemaphoreWait(sph_eth_medicionesHandle, 0) > 0){
+	  if( osSemaphoreWait(sph_eth_medicionesHandle, 0) == osOK){
 		  cargaMediciones = osPoolAlloc(mpoolMediciones_eth);
 		  if ( cargaMediciones != NULL ){
 			  cargaMediciones->corriente = current_gui;
@@ -1272,8 +1303,9 @@ void comunicacion_spi(void const * argument)
 	char *pArrayFromCola;
 	osEvent evt;
 
-	//flag datos pedidos
-	bool flag = false;
+	//Recuerdo de valores anteriores
+	enum modos_carga modo_anterior;
+	uint32_t setpoint_anterior;
 
 	/* Infinite loop */
 	for (;;)
@@ -1297,71 +1329,80 @@ void comunicacion_spi(void const * argument)
 				// Interpreto cadena recibida
 				if (array_SPI_RX[0] == 'r' && array_SPI_RX[1] == 's')
 				{
-					// Recibo y guardo setpoint y modo
-					updateCarga->modo = (enum modos_carga)(((uint8_t)array_SPI_RX[3] - 48) * 10 + ((uint8_t)array_SPI_RX[4] - 48));
-					sscanf((char*) array_SPI_RX, "%*[^S]S%4lu", &updateCarga->setPoint); //Actualizo el setpoint en el CargaHandle local de esta tarea
-					if(updateCarga->modo == m_corriente)
-						updateCarga->setPoint *=100;
-					else if(updateCarga->modo == m_potencia)
-						updateCarga->setPoint *= 100;
-					else if(updateCarga->modo == m_tension)
-						updateCarga->setPoint *= 100;
+					// Recibo y guardo setpoint y modo y verifico peticiones
+					if(array_SPI_RX[2] == 'M'){
+						updateCarga->modo = (enum modos_carga)(((uint8_t)array_SPI_RX[3] - 48) * 10 + ((uint8_t)array_SPI_RX[4] - 48));
+						sscanf((char*) array_SPI_RX, "%*[^S]S%4lu", &updateCarga->setPoint); //Actualizo el setpoint en el CargaHandle local de esta tarea
+						if(updateCarga->modo == m_corriente_on || updateCarga->modo == m_corriente_off)
+							updateCarga->setPoint *=100;
+						else if(updateCarga->modo == m_potencia_on|| updateCarga->modo == m_potencia_off)
+							updateCarga->setPoint *= 100;
+						else if(updateCarga->modo == m_tension_on|| updateCarga->modo == m_tension_off)
+							updateCarga->setPoint *= 100;
+						//Guardo el modo anterior y setpoint
+						modo_anterior = updateCarga->modo;
+						setpoint_anterior = updateCarga->setPoint;
 
-					//Aca hago el trigger
-					updateCarga->flagTrigger = array_SPI_RX[13];
-					if (array_SPI_RX[13] == '1')
-					{// TRIGGER ACTIVADO Y LISTO PARA EL SERVICIO
-						__NOP();
-					}
+						//Aca hago el trigger
+						updateCarga->flagTrigger = array_SPI_RX[13];
+						if (array_SPI_RX[13] == '1')
+						{// TRIGGER ACTIVADO Y LISTO PARA EL SERVICIO
+							__NOP();
+						}
 
-					// Si hay que modificar fecha
-					updateCarga->flagFecha = array_SPI_RX[11];
-					if (array_SPI_RX[11] == '1')
-					{
-						uint8_t arrayFecha[21] = "hmF";
-						HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_RESET);
-						HAL_SPI_TransmitReceive(&hspi2, arrayFecha, array_SPI_RX, 21, HAL_MAX_DELAY);
-						HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_SET);
+						// Si hay que modificar fecha
+						updateCarga->flagFecha = array_SPI_RX[11];
+						if (array_SPI_RX[11] == '1')
+						{
+							uint8_t arrayFecha[21] = "hmF";
+							HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_RESET);
+							HAL_SPI_TransmitReceive(&hspi2, arrayFecha, array_SPI_RX, 21, HAL_MAX_DELAY);
+							HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_SET);
 
-						//Aca guardo la fecha y hora
-						sscanf((char*) array_SPI_RX, "%*[^F]F%2c%2c%2c%2c%2c", &sTime.Hours, &sTime.Minutes, &sDate.Date, &sDate.Month, &sDate.Year);
-						HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BIN);
-						HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BIN);
-					}
+							//Aca guardo la fecha y hora
+							sscanf((char*) array_SPI_RX, "%*[^F]F%2c%2c%2c%2c%2c", &sTime.Hours, &sTime.Minutes, &sDate.Date, &sDate.Month, &sDate.Year);
+							HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BIN);
+							HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BIN);
+						}
 
-					//Modo curva encendido
-					if(array_SPI_RX[15] == '1' && flag == false){
-						osDelay(25);
-						HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_RESET);
-						HAL_SPI_TransmitReceive(&hspi2, "hmA1", array_SPI_RX, 21, HAL_MAX_DELAY);
-						HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_SET);
-						flag = true;
+						//Pidieron sincronizar los datos de la curva (recibi A1)
+						if(array_SPI_RX[15] == '1' ){
+							osDelay(25);
+							HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_RESET);
+							HAL_SPI_TransmitReceive(&hspi2,"hmA1", array_SPI_RX, 21, HAL_MAX_DELAY);
+							HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_SET);
+						}
 					}
 
 					//Empezaron a llegar los datos de la curva
 					if(array_SPI_RX[2] == 'A'){
 						//le pido los10 puntos
-						char msg_completo[100]= "";
+						char *msg_completo;
 						char aux[21];
+						msg_completo = osPoolAlloc(mpoolCurva);
+						if( msg_completo != NULL){
 
-						for(uint8_t i=0; i<21; i++){
-							aux[i] = (char)array_SPI_RX[i];
-						}
-						strcat(msg_completo, aux);
-
-						for(uint8_t contador = 0; contador < 4 ; contador++){
-							osDelay(25);
-							HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_RESET);
-							HAL_SPI_TransmitReceive(&hspi2,"00", array_SPI_RX, 21, HAL_MAX_DELAY);
-							HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_SET);
 							for(uint8_t i=0; i<21; i++){
 								aux[i] = (char)array_SPI_RX[i];
 							}
 							strcat(msg_completo, aux);
-						}
-						flag = false;
-					}
 
+							for(uint8_t contador = 0; contador < 4 ; contador++){
+								osDelay(25);
+								HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_RESET);
+								HAL_SPI_TransmitReceive(&hspi2,"hmA0", array_SPI_RX, 21, HAL_MAX_DELAY);
+								HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_SET);
+								for(uint8_t i=0; i<21; i++){
+									aux[i] = (char)array_SPI_RX[i];
+								}
+								strcat(msg_completo, aux);
+							}
+							osMessagePut(colaCurva, (uint32_t)msg_completo, osWaitForever);
+							osDelay(25);
+						}
+						updateCarga->modo = modo_anterior;
+						updateCarga->setPoint = setpoint_anterior;
+					}//Terminaron de llegar los datos de la curva
 				}
 
 				// Envio los datos analizados task default
@@ -1374,7 +1415,7 @@ void comunicacion_spi(void const * argument)
 		}
 	}
 
-	/* USER CODE END comunicacion_spi */
+  /* USER CODE END comunicacion_spi */
 }
 
 /* USER CODE BEGIN Header_pid_control */
@@ -1424,9 +1465,9 @@ void pid_control(void const * argument)
 
 			p = evt.value.p;
 			modo = (enum modos_carga)p->modo;
-			if(modo == m_corriente)
+			if(modo == m_corriente_on)
 				rT = (float)p->referencia; //Señal de referencia
-			else if(modo == m_potencia)
+			else if(modo == m_potencia_on)
 				setpoint_potencia = (float)p->referencia;
 
 			//Libero memoria asignada para el msj
@@ -1434,7 +1475,7 @@ void pid_control(void const * argument)
 		}
 
 		//Si la carga esta encendida
-		if(modo == m_corriente || modo == m_potencia){
+		if(modo == m_corriente_on || modo == m_potencia_on){
 
 			//Le digo a mediciones que quiero el dato
 			osSemaphoreRelease(sph_pid_medicionesHandle);
@@ -1448,7 +1489,7 @@ void pid_control(void const * argument)
 				yT = p_mediciones->corriente; //Señal de corriente
 
 
-				if(modo == m_potencia){
+				if(modo == m_potencia_on){
 					if( p_mediciones->tension > 0)
 						rT = setpoint_potencia * 1000 / p_mediciones->tension;
 					else
@@ -1527,10 +1568,87 @@ void eth_task(void const * argument)
 	  while(1){
 		  //HTTP inicio
 		  for(uint8_t j = 0; j < 2; j++)	httpServer_run(j); 	// HTTP Server handler
-		  osDelay(100);
+		  osDelay(250);
 	  }
   }
   /* USER CODE END eth_task */
+}
+
+/* USER CODE BEGIN Header_cb_control_curva */
+/**
+* @brief Function implementing the control_curva thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_cb_control_curva */
+void cb_control_curva(void const * argument)
+{
+  /* USER CODE BEGIN cb_control_curva */
+	osEvent evt;
+
+	//Punteros
+	char *p;
+	PID_TypeDef *p_pid;
+	CARGA_HandleTypeDef *updateCarga;
+
+	int matriz[10][2];
+
+	//Limpio semaforo
+	osSemaphoreWait(sph_ctrl_curvaHandle, 0);
+
+  /* Infinite loop */
+	for(;;)
+	{
+		evt = osMessageGet(colaCurva, 100);
+		if(evt.status == osEventMessage){
+			p = evt.value.p;
+
+			for(uint8_t i=0; i<5; i++){
+
+				sscanf(p + i * 20,"rsA%4d%4dA%4d%4d",&matriz[i*2][0], &matriz[i*2][1],&matriz[i*2+1][0],&matriz[i*2+1][1]);
+			}
+			//Libero memoria
+			osPoolFree(mpoolCurva, p);
+		}
+
+
+		if(osSemaphoreWait(sph_ctrl_curvaHandle, 0) == osOK){
+
+			//Le paso a la tarea pid las referencias cuando pase el tiempo
+			for(uint8_t i=0; i<10 && matriz[i][0]!= 0; i++){
+
+				p_pid = osPoolAlloc(mpoolPID);
+				if( p_pid != NULL){
+					//Guardo el valor de referencia y modo a enviar
+					p_pid->modo = m_corriente_on;
+					p_pid->referencia = matriz[i][1] * 100;
+					osMessagePut(colaPID, (uint32_t)p_pid, osWaitForever);
+
+					osDelay((uint32_t)(matriz[i][0]*100));
+				}
+			}//fin puntos
+
+			p_pid = osPoolAlloc(mpoolPID);
+			if( p_pid != NULL){
+				//Guardo el valor de referencia y modo a enviar
+				p_pid->modo = m_corriente_off;
+				p_pid->referencia = 0;
+				osMessagePut(colaPID, (uint32_t)p_pid, 50);
+			}
+
+			//Cuadno termino apago la carga
+			// Reservo un espacio de memoria para asignar los datos recibidos
+			updateCarga = osPoolAlloc(mpoolCARGA_Handle);
+			if(updateCarga != NULL){
+				updateCarga->modo = m_corriente_curva_off;
+
+				osMessagePut(colaCARGA, (uint32_t)updateCarga, osWaitForever);
+			}
+
+		}//termine de pasarle los datos
+
+	}
+  /* USER CODE END cb_control_curva */
 }
 
 /**
