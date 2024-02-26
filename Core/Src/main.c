@@ -1098,7 +1098,7 @@ void StartDefaultTask(void const * argument)
 				CARGAPresente.setPoint = 0;
 			referencia = CARGAPresente.setPoint;
 			//Si esta lejos del setpint
-			if(abs(CARGAPresente.setPoint - CARGAPresente.valorCorriente) > 25){
+			if(abs(CARGAPresente.setPoint - CARGAPresente.valorCorriente) > 100){
 				if(++c_error > 20){//Durante un segundo no pudo llegar al setpoint
 					CARGAPresente.error.e_control = true;
 					referencia = 0;
@@ -1114,7 +1114,7 @@ void StartDefaultTask(void const * argument)
 				CARGAPresente.setPoint =  0;
 			referencia = CARGAPresente.setPoint;
 			//Si esta lejos del setpoint
-			if(abs(CARGAPresente.setPoint - CARGAPresente.valorPotencia) > 100){
+			if(abs(CARGAPresente.setPoint - CARGAPresente.valorPotencia) > 500){
 				if(++c_error > 20){//Durante un segundo no pudo llegar al setpoint
 					CARGAPresente.error.e_control = true;
 					referencia = 0;
@@ -1174,7 +1174,7 @@ void medicion_variables(void const * argument)
   float potencia_gui = 0, potencia_gui_ant = 0;
 
   /* Para poner a punto escalas y offset - Comentar si esta calibrado  */
-  //float promedio = 1, c_mediciones=0;
+  //float promedio = 0, c_mediciones=0;
   //HAL_GPIO_WritePin(VSCALE_GPIO_Port, VSCALE_Pin, GPIO_PIN_SET);//Rango 16V
   //HAL_GPIO_WritePin(VSCALE_GPIO_Port, VSCALE_Pin, GPIO_PIN_RESET);//Rango 160V
 
@@ -1201,12 +1201,12 @@ void medicion_variables(void const * argument)
   for (;;)
   {
 	  /* Medicion de Corriente con filtro EMA */
-	  current = current_ant * (1 - 0.8) + 0.8 * ADC_read_current(&hi2c1);
+	  current = current_ant * (1 - 1) + 1 * ADC_read_current(&hi2c1);
 	  current_ant = current;
 	  current_gui = current_gui_ant * (1-0.8) + 0.8 * current;
 	  current_gui_ant = current_gui;
 	  //promedio += current;
-	  //c_mediciones++;
+	 // c_mediciones++;
 	  /* Medicion de Tension con filtro EMA*/
 	  tension = tension_ant * (1 - 0.8) + 0.8 * ADC_read_tension(&hi2c1, rango);
 	  tension_ant = tension;
@@ -1481,6 +1481,8 @@ void pid_control(void const * argument)
 	b = PID_B;
 	c = PID_C;
 
+	uint32_t c_error=0;
+
 	/* Infinite loop */
 	for(;;)
 	{
@@ -1532,35 +1534,41 @@ void pid_control(void const * argument)
 
 				eT = rT - yT; //Cálculo error corriente
 
-				if(eT > 11 || eT < 11){
+				if(eT > 12 || eT < -12 ){
 
-					iT = b * ( eT + eT0 ) + iT0; //Cálculo del término integral corriente
+					if(c_error++ > 5 || modo == m_potencia_on){
 
-					/*Limite termino integral corriente*/
-					if ( iT > pid_max )
-						iT = pid_max; //Salida integral si es mayor que el MAX
-					else if ( iT < pid_min )
-						iT = pid_min; //Salida integral si es menor que el MIN
+						iT = b * ( eT + eT0 ) + iT0; //Cálculo del término integral corriente
 
-					dT = -c * ( yT - yT0 );	//Cálculo del término derivativo corriente
-					uT = iT + a * eT + dT; //Cálculo de la salida PID corriente
+						/*Limite termino integral corriente*/
+						if ( iT > pid_max )
+							iT = pid_max; //Salida integral si es mayor que el MAX
+						else if ( iT < pid_min )
+							iT = pid_min; //Salida integral si es menor que el MIN
 
-					/*Limite PID corriente*/
-					if ( uT > pid_max )
-						uT = pid_max;           //Salida PID si es mayor que el MAX
-					else if ( uT < pid_min )
-						uT = pid_min;      //Salida PID si es menor que el MIN
+						dT = -c * ( yT - yT0 );	//Cálculo del término derivativo corriente
+						uT = iT + a * eT + dT; //Cálculo de la salida PID corriente
 
-					/* Guardar variables */
-					iT0 = iT;
-					eT0 = eT;
-					yT0 = yT;
+						/*Limite PID corriente*/
+						if ( uT > pid_max )
+							uT = pid_max;           //Salida PID si es mayor que el MAX
+						else if ( uT < pid_min )
+							uT = pid_min;      //Salida PID si es menor que el MIN
 
-					DAC_set(uT);
-					//DAC_set(400);
+						/* Guardar variables */
+						iT0 = iT;
+						eT0 = eT;
+						yT0 = yT;
+
+						DAC_set(uT);
+					}
+					else
+						eT0 = eT;
 				}
-				else
+				else{
 					eT0 = eT;
+					c_error = 0;
+				}
 			}
 			else
 				DAC_set(0);

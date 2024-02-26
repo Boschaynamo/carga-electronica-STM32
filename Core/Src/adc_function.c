@@ -69,7 +69,7 @@ float ADC_read_current (I2C_HandleTypeDef *hi2c){
 	int16_t buffer16 = 0;
 
 	ADC_set(hi2c, corriente);
-	osDelay(8);//DR_125 ->8mS
+	osDelay(10);//DR_125 ->8mS
 
 	buffer[0] = (uint8_t)CONVERSION_REGISTER;
 	HAL_I2C_Master_Transmit(hi2c, ADC_ADDR, buffer, 1, HAL_MAX_DELAY);

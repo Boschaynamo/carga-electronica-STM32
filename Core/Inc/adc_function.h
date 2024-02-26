@@ -23,8 +23,8 @@
 #define ADC_COMP_LAT		COMP_NON_LATCH
 #define ADC_COMP_QUE		COMP_1
 
-#define SCALE_CURRENT 		0.79237 //mA por cuenta FSR=2.048V
-#define	OFFSET_CURRENT		-38.21658 //Offset mA
+#define SCALE_CURRENT 		0.790793 //mA por cuenta FSR=2.048V
+#define	OFFSET_CURRENT		-123.22370 //Offset mA
 #define SCALE_VOLTAGE16		1.05428//mV por cuenta FSR=4.096V
 #define SCALE_VOLTAGE160	5.41784//mV por cuenta FSR=4.096V rango 160V
 #define OFFSET_VOLTAGE16	89.00365//Offset mV
